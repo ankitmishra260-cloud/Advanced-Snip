@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>AdvancedSnip</id>
+    <version>2.5.0</version>
+    <authors>AdvancedSnip</authors>
+    <description>Package Description</description>
+    <repository type="git" />
+    <dependencies>
+      <group targetFramework="net8.0-windows10.0.19041" />
+    </dependencies>
+    <frameworkReferences>
+      <group targetFramework="net8.0-windows10.0.19041">
+        <frameworkReference name="Microsoft.WindowsDesktop.App" />
+      </group>
+    </frameworkReferences>
+  </metadata>
+  <files>
+    <file src="D:\AI Projects\Advanced Snip\AdvancedSnip-Source Code\AdvancedSnip\bin\Debug\net8.0-windows10.0.19041.0\AdvancedSnip.runtimeconfig.json" target="lib\net8.0-windows10.0.19041\AdvancedSnip.runtimeconfig.json" />
+    <file src="D:\AI Projects\Advanced Snip\AdvancedSnip-Source Code\AdvancedSnip\bin\Debug\net8.0-windows10.0.19041.0\AdvancedSnip.dll" target="lib\net8.0-windows10.0.19041\AdvancedSnip.dll" />
+  </files>
+</package>
