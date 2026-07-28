@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="2.0.0.0" name="AdvancedSnip.app" />
+
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 / 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />
+      <!-- Windows 8.1 -->
+      <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}" />
+    </application>
+  </compatibility>
+
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <!-- Per-Monitor V2.
+
+           A screen-capture tool has to see the desktop the way the hardware does. Under
+           the old "system" awareness Windows virtualises coordinates for every monitor
+           whose scale differs from the primary one: window rectangles come back in the
+           wrong units and captures on those displays get stretched by the OS, which is
+           why mixed-DPI setups produced soft, mis-cropped images.
+
+           With Per-Monitor V2 every rectangle in this app is a genuine physical pixel
+           anywhere on the virtual desktop, so captures are sharp and crops land exactly
+           where they were drawn regardless of how each display is scaled. -->
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2, PerMonitor, system</dpiAwareness>
+      <!-- Opt in to the modern GDI scaling path for any legacy bitmap work. -->
+      <gdiScaling xmlns="http://schemas.microsoft.com/SMI/2017/WindowsSettings">true</gdiScaling>
+    </windowsSettings>
+  </application>
+</assembly>

@@ -1,0 +1,88 @@
+<Window x:Class="AdvancedSnip.SnipOverlay"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Snip"
+        Background="Black"
+        AllowsTransparency="False"
+        Cursor="Cross">
+
+    <Grid x:Name="RootGrid"
+          MouseLeftButtonDown="Root_MouseDown"
+          MouseMove="Root_MouseMove"
+          MouseLeftButtonUp="Root_MouseUp"
+          MouseRightButtonDown="Root_Cancel">
+
+        <!-- Frozen screenshot of the whole desktop, one image pixel per screen pixel -->
+        <Image x:Name="ScreenImage" Stretch="Fill" />
+
+        <Canvas x:Name="Layer">
+            <!-- Dim everything outside the selection -->
+            <Path x:Name="DimPath" Fill="#88000000" />
+
+            <Border x:Name="SelBorder"
+                    BorderBrush="#FF3B82F6"
+                    BorderThickness="2"
+                    Visibility="Collapsed"
+                    IsHitTestVisible="False" />
+
+            <!-- Live size readout -->
+            <Border x:Name="SizeTag"
+                    Background="#E61E293B"
+                    CornerRadius="5"
+                    Padding="8,3"
+                    Visibility="Collapsed"
+                    IsHitTestVisible="False">
+                <TextBlock x:Name="SizeText"
+                           Foreground="White"
+                           FontSize="12"
+                           FontFamily="Segoe UI" />
+            </Border>
+
+            <!-- Magnifier loupe for pixel-accurate edges -->
+            <Border x:Name="Loupe"
+                    Width="132" Height="150"
+                    Background="#F21E293B"
+                    CornerRadius="8"
+                    Padding="6"
+                    Visibility="Collapsed"
+                    IsHitTestVisible="False">
+                <StackPanel>
+                    <Border Width="120" Height="90"
+                            ClipToBounds="True"
+                            BorderBrush="#FF334155"
+                            BorderThickness="1"
+                            CornerRadius="4">
+                        <Grid>
+                            <Image x:Name="LoupeImage"
+                                   Stretch="Fill"
+                                   RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                            <!-- Crosshair over the exact pixel -->
+                            <Rectangle Width="1" Fill="#AA3B82F6" HorizontalAlignment="Center"/>
+                            <Rectangle Height="1" Fill="#AA3B82F6" VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                    <TextBlock x:Name="LoupeText"
+                               Foreground="#FFCBD5E1"
+                               FontFamily="Consolas"
+                               FontSize="11"
+                               HorizontalAlignment="Center"
+                               Margin="0,5,0,0"/>
+                </StackPanel>
+            </Border>
+        </Canvas>
+
+        <!-- Hint bar, pinned to whichever monitor the pointer is on -->
+        <Border x:Name="HintBar"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                Background="#E61E293B"
+                CornerRadius="10"
+                Padding="18,10">
+            <TextBlock x:Name="HintText"
+                       Foreground="White"
+                       FontSize="14"
+                       FontFamily="Segoe UI"
+                       Text="Drag to select  ·  Click a window to grab it  ·  Esc to cancel" />
+        </Border>
+    </Grid>
+</Window>

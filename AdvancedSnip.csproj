@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- The Windows version suffix is what switches on the WinRT projections. OCR uses
+         Windows.Media.Ocr, which ships with Windows itself — no NuGet package, no model
+         file, no network call, and it honours whichever OCR language packs the user has
+         installed. 19041 is the floor because SetWindowDisplayAffinity's
+         WDA_EXCLUDEFROMCAPTURE (used to keep the progress window out of captures) needs
+         Windows 10 2004. -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <Nullable>enable</Nullable>
+    <!-- Implicit usings are DISABLED on purpose: this project references both WPF and
+         WinForms, which share many type names (Application, MessageBox, Point, Size,
+         Color, Brushes, Clipboard...). Controlling usings per-file avoids ambiguity. -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>AdvancedSnip</AssemblyName>
+    <RootNamespace>AdvancedSnip</RootNamespace>
+    <Version>2.5.0</Version>
+    <LangVersion>latest</LangVersion>
+	  <ApplicationIcon>ASico.ico</ApplicationIcon>
+
+    <!-- WFAC010 asks for high-DPI to be configured by project property or
+         Application.SetHighDpiMode instead of the manifest. Suppressed deliberately:
+
+         * That guidance is written for WinForms apps. This is a WPF app that merely
+           references WinForms for the tray icon, so its entry point is generated from
+           App.xaml and never calls ApplicationConfiguration.Initialize() — the property
+           the analyzer suggests would therefore do nothing at all.
+
+         * DPI awareness is latched by the OS at process start and cannot be changed
+           once any window exists. The manifest is the only place that reliably applies
+           before WPF initialises.
+
+         * Per-Monitor V2 is load-bearing here: every capture rectangle is a physical
+           pixel on the virtual desktop, which is what makes crops land correctly on
+           monitors that aren't at the primary display's scale. -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
+    <!-- UIAutomationClient / UIAutomationTypes ship with the WPF framework reference,
+         so System.Windows.Automation needs no extra package. It is used only as an
+         optional accuracy boost in scroll capture; everything still works without it. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="ASico.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="ASico.ico" />
+  </ItemGroup>
+
+</Project>

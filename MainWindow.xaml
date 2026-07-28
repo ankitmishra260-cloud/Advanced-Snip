@@ -1,0 +1,898 @@
+<Window x:Class="AdvancedSnip.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="Advanced Snip"
+        Width="820" Height="680"
+        MinWidth="720" MinHeight="540"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="Segoe UI"
+        Background="{DynamicResource Brush.Window}"
+        Foreground="{DynamicResource Brush.Text}"
+        StateChanged="Window_StateChanged">
+
+    <!-- The window draws its own title bar. WindowChrome rather than
+         WindowStyle="None" so the real frame survives: Aero Snap, snap layouts on the
+         maximize button, drag-to-tile, double-click-to-maximize and the resize grips all
+         keep coming from Windows instead of being reimplemented. CaptionHeight makes the
+         top strip draggable; anything clickable up there opts out with
+         shell:WindowChrome.IsHitTestVisibleInChrome. -->
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="34"
+                            CornerRadius="0"
+                            GlassFrameThickness="0"
+                            ResizeBorderThickness="6"
+                            UseAeroCaptionButtons="False"/>
+    </shell:WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <!-- Sidebar nav button style -->
+        <Style x:Key="NavBtn" TargetType="RadioButton">
+            <Setter Property="Background"   Value="Transparent"/>
+            <Setter Property="Foreground"   Value="{DynamicResource Brush.TextMuted}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding"      Value="18,12"/>
+            <Setter Property="FontSize"     Value="13"/>
+            <Setter Property="FontFamily"   Value="Segoe UI"/>
+            <Setter Property="Cursor"       Value="Hand"/>
+            <Setter Property="GroupName"    Value="Nav"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="8" Margin="6,2">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brush.NavActive}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brush.Hover}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Title-bar buttons. Sized to Windows' own 46×32 so the row reads as a real
+             caption rather than a toolbar that happens to be at the top. -->
+        <Style x:Key="CaptionBtn" TargetType="Button">
+            <Setter Property="Width"           Value="46"/>
+            <Setter Property="Height"          Value="34"/>
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="Foreground"      Value="{DynamicResource Brush.TextBody}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontFamily"      Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize"        Value="10"/>
+            <Setter Property="Focusable"       Value="False"/>
+            <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background"
+                                        Value="{DynamicResource Brush.Hover}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Close is the one destructive control up there, so it gets the standard red
+             rather than the neutral hover. -->
+        <Style x:Key="CaptionCloseBtn" TargetType="Button" BasedOn="{StaticResource CaptionBtn}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}">
+                            <ContentPresenter x:Name="Cp" HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FFE81123"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Section" TargetType="TextBlock">
+            <Setter Property="FontSize"     Value="12"/>
+            <Setter Property="FontWeight"   Value="SemiBold"/>
+            <Setter Property="Foreground"   Value="{DynamicResource Brush.TextMuted}"/>
+            <Setter Property="Margin"       Value="0,18,0,8"/>
+        </Style>
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Foreground"        Value="{DynamicResource Brush.TextBody}"/>
+            <Setter Property="FontSize"          Value="13"/>
+            <Setter Property="MinWidth"          Value="170"/>
+        </Style>
+        <Style x:Key="Ghost" TargetType="Button">
+            <Setter Property="Padding"      Value="12,6"/>
+            <Setter Property="Background"   Value="{DynamicResource Brush.Card}"/>
+            <Setter Property="Foreground"   Value="{DynamicResource Brush.TextBody}"/>
+            <Setter Property="BorderBrush"  Value="{DynamicResource Brush.BorderInput}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor"       Value="Hand"/>
+            <Setter Property="FontSize"     Value="13"/>
+            <!-- An explicit template is needed, not just a Background setter: the stock
+                 Button template overrides Background from system brushes on hover, so a
+                 themed button would flash light blue on a dark card. -->
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="6"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush"
+                                        Value="{DynamicResource Brush.Accent}"/>
+                                <Setter Property="Foreground"
+                                        Value="{DynamicResource Brush.Accent}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="HotkeyBox" TargetType="TextBox">
+            <Setter Property="IsReadOnly"              Value="True"/>
+            <Setter Property="IsReadOnlyCaretVisible"  Value="False"/>
+            <Setter Property="Padding"                 Value="8,6"/>
+            <Setter Property="FontSize"                Value="13"/>
+            <Setter Property="Cursor"                  Value="Hand"/>
+            <Setter Property="Background"              Value="{DynamicResource Brush.Input}"/>
+            <Setter Property="Foreground"              Value="{DynamicResource Brush.Text}"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <!-- Gallery thumb card -->
+        <Style x:Key="GalleryItem" TargetType="ListBoxItem">
+            <Setter Property="Padding"  Value="0"/>
+            <Setter Property="Margin"   Value="6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Card" CornerRadius="10"
+                                Background="{DynamicResource Brush.Card}"
+                                BorderBrush="Transparent" BorderThickness="2">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="8" ShadowDepth="2"
+                                                  Opacity="0.10" Color="Black"/>
+                            </Border.Effect>
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource Brush.AccentSoft}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="34"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ═══════════ TITLE BAR ═══════════ -->
+        <Border Grid.Row="0" Background="{DynamicResource Brush.Sidebar}"
+                BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <!-- Segoe MDL2 glyphs: E7C4 tray, E921 minimise, E922/E923 maximise
+                         and restore, E8BB close. -->
+                    <Button x:Name="TrayBtn" Style="{StaticResource CaptionBtn}"
+                            Content="&#xE7C4;" ToolTip="Minimise to tray"
+                            Click="HideBtn_Click"/>
+                    <Button x:Name="MinBtn" Style="{StaticResource CaptionBtn}"
+                            Content="&#xE921;" ToolTip="Minimise"
+                            Click="Minimise_Click"/>
+                    <Button x:Name="MaxBtn" Style="{StaticResource CaptionBtn}"
+                            Content="&#xE922;" ToolTip="Maximise"
+                            Click="MaximiseRestore_Click"/>
+                    <Button x:Name="CloseBtn" Style="{StaticResource CaptionCloseBtn}"
+                            Content="&#xE8BB;" ToolTip="Close"
+                            Click="CloseBtn_Click"/>
+                </StackPanel>
+
+                <!-- Empty fill: CaptionHeight makes this strip draggable, and
+                     double-clicking it maximises, both handled by Windows. -->
+                <TextBlock x:Name="CaptionTitle" VerticalAlignment="Center" Margin="14,0,0,0"
+                           FontSize="12" Foreground="{DynamicResource Brush.TextMuted}"
+                           Text="Advanced Snip"/>
+            </DockPanel>
+        </Border>
+
+        <Grid Grid.Row="1">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="190"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ═══════════ SIDEBAR ═══════════ -->
+        <Border Grid.Column="0" Background="{DynamicResource Brush.Sidebar}"
+                BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,1,0">
+            <DockPanel>
+                <!-- Logo area -->
+                <StackPanel DockPanel.Dock="Top" Margin="18,22,18,16">
+                    <TextBlock Text="✂ Advanced Snip"
+                               FontSize="16" FontWeight="Bold" Foreground="{DynamicResource Brush.Text}"/>
+                    <TextBlock x:Name="VersionText" Text="v1.0 by Ankit Mishra"
+                               FontSize="11" Foreground="{DynamicResource Brush.TextMuted}" Margin="0,2,0,0"/>
+                </StackPanel>
+
+                <!-- Nav -->
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                    <RadioButton x:Name="NavGallery"  Content="🖼  Gallery"
+                                 Style="{StaticResource NavBtn}" IsChecked="True"
+                                 Checked="Nav_Checked"/>
+                    <RadioButton x:Name="NavSettings" Content="⚙  Settings"
+                                 Style="{StaticResource NavBtn}"
+                                 Checked="Nav_Checked"/>
+                    <RadioButton x:Name="NavAbout"    Content="ℹ  About"
+                                 Style="{StaticResource NavBtn}"
+                                 Checked="Nav_Checked"/>
+                </StackPanel>
+
+                <!-- Bottom quick-actions -->
+                <StackPanel DockPanel.Dock="Bottom" Margin="12,0,12,16">
+                    <Button Content="📸  Snip now" Style="{StaticResource Ghost}"
+                            Click="SnipNowBtn_Click" HorizontalAlignment="Stretch"
+                            Margin="0,0,0,6"/>
+                    <Button Content="Minimize to tray" Style="{StaticResource Ghost}"
+                            Click="HideBtn_Click" HorizontalAlignment="Stretch"/>
+                </StackPanel>
+
+                <Border/><!-- spacer -->
+            </DockPanel>
+        </Border>
+
+        <!-- ═══════════ CONTENT AREA ═══════════ -->
+        <Grid Grid.Column="1">
+
+            <!-- ─── GALLERY ─── -->
+            <Grid x:Name="PageGallery">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Toolbar: search, sort, and the actions that act on a selection -->
+                <Border Grid.Row="0" Background="{DynamicResource Brush.Card}"
+                        BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1"
+                        Padding="16,10">
+                    <StackPanel>
+                        <DockPanel>
+                            <TextBlock Text="Gallery" FontSize="17" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Brush.Text}"
+                                       VerticalAlignment="Center"/>
+
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <TextBlock Text="Sort" VerticalAlignment="Center" FontSize="12"
+                                           Margin="0,0,6,0"
+                                           Foreground="{DynamicResource Brush.TextMuted}"/>
+                                <ComboBox x:Name="GallerySortCombo" Width="150" FontSize="12"
+                                          VerticalContentAlignment="Center"
+                                          SelectionChanged="GallerySort_Changed">
+                                    <ComboBoxItem Content="Newest first" Tag="NewestFirst"/>
+                                    <ComboBoxItem Content="Oldest first" Tag="OldestFirst"/>
+                                    <ComboBoxItem Content="Name A–Z"     Tag="NameAsc"/>
+                                    <ComboBoxItem Content="Name Z–A"     Tag="NameDesc"/>
+                                    <ComboBoxItem Content="Largest first" Tag="SizeDesc"/>
+                                    <ComboBoxItem Content="Smallest first" Tag="SizeAsc"/>
+                                </ComboBox>
+                                <Button x:Name="GalleryRefreshBtn" Content="↻"
+                                        ToolTip="Rescan the folder (F5)"
+                                        Style="{StaticResource Ghost}" Margin="8,0,0,0"
+                                        Click="GalleryRefresh_Click"/>
+                            </StackPanel>
+
+                            <!-- Search sits between the title and the sort controls -->
+                            <Border Margin="16,0,16,0" MaxWidth="280"
+                                    Background="{DynamicResource Brush.Input}"
+                                    BorderBrush="{DynamicResource Brush.BorderInput}"
+                                    BorderThickness="1" CornerRadius="6">
+                                <DockPanel>
+                                    <TextBlock Text="🔍" Margin="8,0,4,0" FontSize="12"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource Brush.TextMuted}"/>
+                                    <Button x:Name="SearchClearBtn" DockPanel.Dock="Right"
+                                            Content="✕" Style="{StaticResource Ghost}"
+                                            Padding="6,2" Visibility="Collapsed"
+                                            Click="SearchClear_Click"/>
+                                    <TextBox x:Name="GallerySearchBox" BorderThickness="0"
+                                             Background="Transparent" Padding="2,6,6,6"
+                                             FontSize="12" VerticalContentAlignment="Center"
+                                             ToolTip="File name"
+                                             Foreground="{DynamicResource Brush.Text}"
+                                             TextChanged="GallerySearch_Changed"/>
+                                </DockPanel>
+                            </Border>
+                        </DockPanel>
+
+                        <!-- Filters: text search inside images, and a date range -->
+                        <DockPanel Margin="0,10,0,0">
+                            <CheckBox x:Name="OcrSearchChk" VerticalAlignment="Center"
+                                      Content="Search text inside images"
+                                      ToolTip="Reads the words in each capture so you can search for them"
+                                      Checked="OcrSearch_Toggled" Unchecked="OcrSearch_Toggled"/>
+
+                            <!-- Its own box: mixing "find a file called X" with "find a
+                                 picture containing X" in one field makes it impossible to
+                                 tell which kind of match you got. -->
+                            <Border x:Name="TextSearchBox" Margin="12,0,0,0" Width="240"
+                                    Visibility="Collapsed"
+                                    Background="{DynamicResource Brush.Input}"
+                                    BorderBrush="{DynamicResource Brush.BorderInput}"
+                                    BorderThickness="1" CornerRadius="6">
+                                <DockPanel>
+                                    <TextBlock Text="🔤" Margin="8,0,4,0" FontSize="12"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource Brush.TextMuted}"/>
+                                    <Button x:Name="TextSearchClearBtn" DockPanel.Dock="Right"
+                                            Content="✕" Style="{StaticResource Ghost}"
+                                            Padding="6,2" Visibility="Collapsed"
+                                            Click="TextSearchClear_Click"/>
+                                    <TextBox x:Name="OcrSearchInput" BorderThickness="0"
+                                             Background="Transparent" Padding="2,5,6,5"
+                                             FontSize="12" VerticalContentAlignment="Center"
+                                             ToolTip="Words to look for inside the pictures"
+                                             Foreground="{DynamicResource Brush.Text}"
+                                             TextChanged="TextSearch_Changed"/>
+                                </DockPanel>
+                            </Border>
+
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                                        Margin="16,0,0,0">
+                                <TextBlock Text="Dates" VerticalAlignment="Center" FontSize="12"
+                                           Margin="0,0,6,0"
+                                           Foreground="{DynamicResource Brush.TextMuted}"/>
+                                <ComboBox x:Name="DateRangeCombo" Width="140" FontSize="12"
+                                          VerticalContentAlignment="Center"
+                                          SelectionChanged="DateRange_Changed">
+                                    <ComboBoxItem Content="Any time"     Tag="Any"/>
+                                    <ComboBoxItem Content="Today"        Tag="Today"/>
+                                    <ComboBoxItem Content="Yesterday"    Tag="Yesterday"/>
+                                    <ComboBoxItem Content="Last 7 days"  Tag="Week"/>
+                                    <ComboBoxItem Content="Last 30 days" Tag="Month"/>
+                                    <ComboBoxItem Content="This year"    Tag="Year"/>
+                                    <ComboBoxItem Content="Custom range" Tag="Custom"/>
+                                </ComboBox>
+
+                                <StackPanel x:Name="CustomRangePanel" Orientation="Horizontal"
+                                            Visibility="Collapsed" Margin="8,0,0,0">
+                                    <DatePicker x:Name="DateFrom" Width="122" FontSize="12"
+                                                SelectedDateChanged="CustomDate_Changed"/>
+                                    <TextBlock Text="→" VerticalAlignment="Center" Margin="6,0"
+                                               Foreground="{DynamicResource Brush.TextMuted}"/>
+                                    <DatePicker x:Name="DateTo" Width="122" FontSize="12"
+                                                SelectedDateChanged="CustomDate_Changed"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Fills whatever is left, and is the element that gets
+                                 trimmed rather than pushing the date controls off. -->
+                            <TextBlock x:Name="OcrStatusText" VerticalAlignment="Center"
+                                       Margin="12,0,0,0" FontSize="11"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource Brush.TextMuted}"/>
+                        </DockPanel>
+
+                        <!-- Selection-aware action row -->
+                        <DockPanel Margin="0,10,0,0">
+                            <TextBlock x:Name="GallerySelectionText" VerticalAlignment="Center"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource Brush.TextFaint}"/>
+
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button x:Name="GallerySelectAllBtn" Content="Select all"
+                                        Style="{StaticResource Ghost}" Margin="0,0,6,0"
+                                        Click="GallerySelectAll_Click"/>
+                                <Button x:Name="GalleryClearSelBtn" Content="Clear"
+                                        Style="{StaticResource Ghost}" Margin="0,0,6,0"
+                                        Click="GalleryClearSelection_Click"/>
+                                <Rectangle Width="1" Margin="4,4" 
+                                           Fill="{DynamicResource Brush.Border}"/>
+                                <Button x:Name="GalleryEditBtn" Content="✎ Edit"
+                                        Style="{StaticResource Ghost}" Margin="6,0,6,0"
+                                        Click="GalleryEdit_Click" IsEnabled="False"/>
+                                <Button x:Name="GalleryCopyBtn" Content="Copy"
+                                        Style="{StaticResource Ghost}" Margin="0,0,6,0"
+                                        Click="GalleryCopy_Click" IsEnabled="False"/>
+                                <Button x:Name="GalleryOpenFolderBtn" Content="Open folder"
+                                        Style="{StaticResource Ghost}" Margin="0,0,6,0"
+                                        Click="GalleryOpenFolder_Click"/>
+                                <Button x:Name="GalleryDeleteBtn" Content="🗑 Delete"
+                                        Style="{StaticResource Ghost}"
+                                        Click="GalleryDelete_Click" IsEnabled="False"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Thumbnail grid -->
+                <ScrollViewer x:Name="GalleryScroller" Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto" Padding="6">
+                    <Grid>
+                        <StackPanel x:Name="GalleryEmpty" HorizontalAlignment="Center"
+                                    VerticalAlignment="Center" Margin="0,60,0,0">
+                            <TextBlock x:Name="GalleryEmptyTitle" Text="No snips yet"
+                                       FontSize="18" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Brush.TextMuted}"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="GalleryEmptyHint"
+                                       Text="Press your snip hotkey to capture a region."
+                                       Foreground="{DynamicResource Brush.TextMuted}"
+                                       FontSize="13" Margin="0,6,0,0"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+
+                        <ListBox x:Name="GalleryList"
+                                 Background="Transparent" BorderThickness="0"
+                                 SelectionMode="Extended"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 ItemContainerStyle="{StaticResource GalleryItem}"
+                                 SelectionChanged="GalleryList_SelectionChanged"
+                                 MouseDoubleClick="GalleryList_DoubleClick"
+                                 KeyDown="GalleryList_KeyDown">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Width="180" Margin="0">
+                                        <Border CornerRadius="8,8,0,0" ClipToBounds="True"
+                                                Background="{DynamicResource Brush.Subtle}"
+                                                Height="120">
+                                            <Grid>
+                                                <!-- Placeholder shows until the decoder
+                                                     gets to this item. -->
+                                                <TextBlock Text="…" FontSize="20"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource Brush.TextMuted}"/>
+                                                <Image Source="{Binding Thumb}"
+                                                       Stretch="Uniform"
+                                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                            </Grid>
+                                        </Border>
+                                        <StackPanel Margin="10,8,10,10">
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource Brush.TextHeading}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding FilePath}"/>
+                                            <TextBlock Text="{Binding SubtitleLabel}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource Brush.TextMuted}"
+                                                       Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                            <ListBox.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Edit…"             Click="GalleryEdit_Click"/>
+                                    <MenuItem Header="Copy to clipboard" Click="GalleryCopy_Click"/>
+                                    <MenuItem Header="Open file"         Click="GalleryOpenFile_Click"/>
+                                    <MenuItem Header="Show in Explorer"  Click="GalleryShowInExplorer_Click"/>
+                                    <Separator/>
+                                    <MenuItem Header="Select all"        Click="GallerySelectAll_Click"/>
+                                    <Separator/>
+                                    <MenuItem Header="Delete"            Click="GalleryDelete_Click"/>
+                                </ContextMenu>
+                            </ListBox.ContextMenu>
+                        </ListBox>
+                    </Grid>
+                </ScrollViewer>
+
+                <!-- Status bar doubles as the pager -->
+                <Border Grid.Row="2" Background="{DynamicResource Brush.Card}"
+                        BorderBrush="{DynamicResource Brush.Border}"
+                        BorderThickness="0,1,0,0" Padding="16,7">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                                    x:Name="GalleryPager">
+                            <Button x:Name="GalleryPrevBtn" Content="‹ Previous"
+                                    Style="{StaticResource Ghost}" Padding="10,3"
+                                    Click="GalleryPrev_Click"/>
+                            <TextBlock x:Name="GalleryPageText" VerticalAlignment="Center"
+                                       Margin="10,0" FontSize="12"
+                                       Foreground="{DynamicResource Brush.TextFaint}"/>
+                            <Button x:Name="GalleryNextBtn" Content="Next ›"
+                                    Style="{StaticResource Ghost}" Padding="10,3"
+                                    Click="GalleryNext_Click"/>
+                        </StackPanel>
+                        <TextBlock x:Name="GalleryStatus" Text="Loading…"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Brush.TextMuted}" FontSize="12"/>
+                    </DockPanel>
+                </Border>
+            </Grid>
+
+            <!-- ─── SETTINGS ─── -->
+            <ScrollViewer x:Name="PageSettings" Visibility="Collapsed"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="28,24,28,28">
+                    <TextBlock Text="Settings" FontSize="17" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Brush.Text}" Margin="0,0,0,4"/>
+
+                    <!-- CAPTURE -->
+                    <TextBlock Text="CAPTURE" Style="{StaticResource Section}"/>
+
+                    <DockPanel Margin="0,0,0,10">
+                        <TextBlock Text="Save folder" Style="{StaticResource FieldLabel}"/>
+                        <Button Content="Browse…" Style="{StaticResource Ghost}"
+                                DockPanel.Dock="Right" Margin="6,0,0,0" Click="Browse_Click"/>
+                        <Button Content="Open" Style="{StaticResource Ghost}"
+                                DockPanel.Dock="Right" Margin="6,0,0,0" Click="OpenFolder_Click"/>
+                        <TextBox x:Name="FolderBox" Padding="8,6" FontSize="13"
+                                 VerticalContentAlignment="Center"/>
+                    </DockPanel>
+
+                    <DockPanel Margin="0,0,0,10">
+                        <TextBlock Text="Filename prefix" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="PrefixBox" Padding="8,6" FontSize="13" MaxWidth="200"
+                                 HorizontalAlignment="Left" VerticalContentAlignment="Center"/>
+                    </DockPanel>
+
+                    <DockPanel Margin="0,0,0,10">
+                        <TextBlock Text="Image format" Style="{StaticResource FieldLabel}"/>
+                        <ComboBox x:Name="FormatCombo" Width="120" HorizontalAlignment="Left"
+                                  Padding="8,4" FontSize="13"
+                                  SelectionChanged="FormatCombo_SelectionChanged">
+                            <ComboBoxItem Content="PNG"/>
+                            <ComboBoxItem Content="JPEG"/>
+                        </ComboBox>
+                    </DockPanel>
+
+                    <DockPanel x:Name="JpegRow" Margin="0,0,0,10">
+                        <TextBlock Text="JPEG quality" Style="{StaticResource FieldLabel}"/>
+                        <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextBody}" FontSize="13"
+                                   MinWidth="32" Margin="8,0,0,0"
+                                   Text="{Binding ElementName=JpegSlider, Path=Value, StringFormat={}{0:0}%}"/>
+                        <Slider x:Name="JpegSlider" Minimum="30" Maximum="100" Width="200"
+                                IsSnapToTickEnabled="True" TickFrequency="5"
+                                HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                    </DockPanel>
+
+                    <DockPanel Margin="0,0,0,10">
+                        <TextBlock Text="Overlay dim opacity" Style="{StaticResource FieldLabel}"/>
+                        <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextBody}" FontSize="13"
+                                   MinWidth="32" Margin="8,0,0,0"
+                                   Text="{Binding ElementName=OpacitySlider, Path=Value, StringFormat={}{0:0}%}"/>
+                        <Slider x:Name="OpacitySlider" Minimum="20" Maximum="90" Width="200"
+                                IsSnapToTickEnabled="True" TickFrequency="5"
+                                HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                    </DockPanel>
+
+                    <!-- SCROLL CAPTURE -->
+                    <TextBlock Text="SCROLL CAPTURE" Style="{StaticResource Section}"/>
+
+                    <DockPanel Margin="0,0,0,10">
+                        <TextBlock Text="Capture speed" Style="{StaticResource FieldLabel}"/>
+                        <ComboBox x:Name="ScrollSpeedCombo" Width="150" HorizontalAlignment="Left"
+                                  Padding="8,4" FontSize="13">
+                            <ComboBoxItem Content="Fast"/>
+                            <ComboBoxItem Content="Balanced"/>
+                            <ComboBoxItem Content="Thorough"/>
+                        </ComboBox>
+                    </DockPanel>
+                    <TextBlock Text="How long to wait for each screenful to finish drawing. Use Thorough for pages that load images as you scroll."
+                               Foreground="{DynamicResource Brush.TextMuted}" FontSize="11" Margin="170,0,0,12" TextWrapping="Wrap"/>
+
+                    <DockPanel Margin="0,0,0,10">
+                        <TextBlock Text="Maximum image height" Style="{StaticResource FieldLabel}"/>
+                        <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextBody}" FontSize="13"
+                                   MinWidth="70" Margin="8,0,0,0"
+                                   Text="{Binding ElementName=ScrollHeightSlider, Path=Value, StringFormat={}{0:0} px}"/>
+                        <Slider x:Name="ScrollHeightSlider" Minimum="2000" Maximum="60000" Width="200"
+                                IsSnapToTickEnabled="True" TickFrequency="1000"
+                                HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                    </DockPanel>
+
+                    <CheckBox x:Name="ScrollAutoRegionChk" Foreground="{DynamicResource Brush.TextBody}" Margin="0,4,0,0"
+                              Content="Detect the scrolling area automatically (skips toolbars and sticky headers)"/>
+                    <CheckBox x:Name="ScrollRestoreChk" Foreground="{DynamicResource Brush.TextBody}" Margin="0,8,0,0"
+                              Content="Put the window back where it was scrolled to afterwards"/>
+
+                    <!-- CLIPBOARD -->
+                    <TextBlock Text="CLIPBOARD" Style="{StaticResource Section}"/>
+
+                    <DockPanel Margin="0,0,0,10">
+                        <TextBlock Text="Images to keep in history" Style="{StaticResource FieldLabel}"/>
+                        <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextBody}" FontSize="13"
+                                   MinWidth="28" Margin="8,0,0,0"
+                                   Text="{Binding ElementName=HistorySlider, Path=Value, StringFormat={}{0:0}}"/>
+                        <Slider x:Name="HistorySlider" Minimum="5" Maximum="30" Width="200"
+                                IsSnapToTickEnabled="True" TickFrequency="1"
+                                HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                    </DockPanel>
+
+                    <CheckBox x:Name="CopyChk" Foreground="{DynamicResource Brush.TextBody}" Margin="0,4,0,0"
+                              Content="Copy each snip to clipboard automatically"/>
+
+                    <!-- APPEARANCE -->
+                    <TextBlock Text="APPEARANCE" Style="{StaticResource Section}"/>
+                    <DockPanel Margin="0,0,0,10">
+                        <TextBlock Text="Theme" Style="{StaticResource FieldLabel}"/>
+                        <ComboBox x:Name="ThemeCombo" Width="220" HorizontalAlignment="Left"
+                                  VerticalContentAlignment="Center"
+                                  SelectionChanged="Theme_Changed">
+                            <ComboBoxItem Content="Match Windows" Tag="System"/>
+                            <ComboBoxItem Content="Light"         Tag="Light"/>
+                            <ComboBoxItem Content="Dark"          Tag="Dark"/>
+                        </ComboBox>
+                    </DockPanel>
+                    <TextBlock Text="Match Windows follows the system setting live, including its light/dark schedule."
+                               Foreground="{DynamicResource Brush.TextMuted}" FontSize="11"
+                               Margin="0,0,0,4"/>
+
+                    <!-- GALLERY -->
+                    <TextBlock Text="GALLERY" Style="{StaticResource Section}"/>
+                    <DockPanel Margin="0,0,0,10">
+                        <TextBlock Text="Thumbnails per page" Style="{StaticResource FieldLabel}"/>
+                        <TextBlock x:Name="PageSizeValue" DockPanel.Dock="Right" MinWidth="46"
+                                   VerticalAlignment="Center" TextAlignment="Right"
+                                   Foreground="{DynamicResource Brush.TextBody}"/>
+                        <Slider x:Name="PageSizeSlider" Minimum="50" Maximum="500" Width="200"
+                                IsSnapToTickEnabled="True" TickFrequency="25"
+                                HorizontalAlignment="Left" VerticalAlignment="Center"
+                                ValueChanged="PageSize_Changed"/>
+                    </DockPanel>
+                    <CheckBox x:Name="RecycleChk" Foreground="{DynamicResource Brush.TextBody}"
+                              Content="Send deleted captures to the Recycle Bin"/>
+
+                    <!-- NOTIFICATIONS -->
+                    <TextBlock Text="NOTIFICATIONS" Style="{StaticResource Section}"/>
+                    <CheckBox x:Name="NotifyChk" Foreground="{DynamicResource Brush.TextBody}"
+                              Content="Show tray notification after each snip"/>
+                    <CheckBox x:Name="EditOnClickChk" Foreground="{DynamicResource Brush.TextBody}"
+                              Margin="0,8,0,0"
+                              Content="Clicking that notification opens the capture for editing"/>
+
+                    <!-- HOTKEYS -->
+                    <TextBlock Text="HOTKEYS" Style="{StaticResource Section}"/>
+                    <TextBlock Text="Click a box then press the combination (must include Ctrl, Alt, Shift, or Win)."
+                               Foreground="{DynamicResource Brush.TextMuted}" FontSize="11" Margin="0,0,0,10"/>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="170"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Take a snip"              Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
+                        <TextBox   Grid.Row="0" Grid.Column="1" x:Name="SnipHotkeyBox"          Style="{StaticResource HotkeyBox}" Margin="0,0,0,8" GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="Snip"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Scroll capture window"    Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
+                        <TextBox   Grid.Row="1" Grid.Column="1" x:Name="ScrollCaptureHotkeyBox" Style="{StaticResource HotkeyBox}" Margin="0,0,0,8" GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="ScrollCapture"/>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Show history HUD"         Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
+                        <TextBox   Grid.Row="2" Grid.Column="1" x:Name="HistoryHotkeyBox"       Style="{StaticResource HotkeyBox}" Margin="0,0,0,8" GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="History"/>
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Next image + paste"       Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
+                        <TextBox   Grid.Row="3" Grid.Column="1" x:Name="NextHotkeyBox"          Style="{StaticResource HotkeyBox}" Margin="0,0,0,8" GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="Next"/>
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Previous image + paste"   Style="{StaticResource FieldLabel}"/>
+                        <TextBox   Grid.Row="4" Grid.Column="1" x:Name="PrevHotkeyBox"          Style="{StaticResource HotkeyBox}"                   GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="Prev"/>
+                    </Grid>
+
+                    <!-- STARTUP -->
+                    <TextBlock Text="STARTUP &amp; WINDOW" Style="{StaticResource Section}"/>
+                    <CheckBox x:Name="StartupChk" Foreground="{DynamicResource Brush.TextBody}"
+                              Content="Start Advanced Snip when I sign in to Windows"
+                              Checked="Startup_Toggled" Unchecked="Startup_Toggled"/>
+
+                    <!-- Rather than assume the registry write worked, this reports what
+                         Windows will actually do at the next sign-in. -->
+                    <Border x:Name="StartupStatusPanel" Margin="24,8,0,0" Padding="10,7"
+                            CornerRadius="6"
+                            Background="{DynamicResource Brush.Subtle}"
+                            BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1">
+                        <DockPanel>
+                            <Button x:Name="StartupFixBtn" DockPanel.Dock="Right"
+                                    Content="Fix" Style="{StaticResource Ghost}"
+                                    Padding="10,3" Margin="8,0,0,0"
+                                    Visibility="Collapsed" Click="StartupFix_Click"/>
+                            <TextBlock x:Name="StartupStatusText" FontSize="12"
+                                       TextWrapping="Wrap" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource Brush.TextBody}"/>
+                        </DockPanel>
+                    </Border>
+
+                    <CheckBox x:Name="ShowOnStartChk" Foreground="{DynamicResource Brush.TextBody}"
+                              Margin="0,12,0,0" Content="Open this window when the app starts"/>
+                    <TextBlock Text="A sign-in launch always goes straight to the tray, whatever this is set to."
+                               Foreground="{DynamicResource Brush.TextMuted}" FontSize="11"
+                               Margin="24,3,0,0"/>
+                    <CheckBox x:Name="MinimiseChk" Foreground="{DynamicResource Brush.TextBody}"
+                              Margin="0,8,0,0" Content="Minimise to tray when this window is closed"/>
+
+                    <!-- Save / status -->
+                    <Separator Margin="0,20,0,16"/>
+                    <DockPanel>
+                        <TextBlock x:Name="StatusText" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Brush.Success}" FontSize="12"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
+                            <Button Content="Clear snip history" Style="{StaticResource Ghost}"
+                                    Click="ClearBtn_Click" Margin="0,0,10,0"/>
+                            <Button Content="Save settings" Click="SaveBtn_Click"
+                                    Padding="18,8" Background="{DynamicResource Brush.Accent}" Foreground="{DynamicResource Brush.OnAccent}"
+                                    BorderThickness="0" Cursor="Hand" FontWeight="SemiBold" FontSize="13"/>
+                        </StackPanel>
+                    </DockPanel>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- ─── ABOUT ─── -->
+            <ScrollViewer x:Name="PageAbout" Visibility="Collapsed"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Stretch">
+                <!-- MaxWidth keeps line lengths readable at ultrawide resolutions.
+                     HorizontalAlignment="Left" is intentional — centring a text page
+                     feels odd; left-aligned with generous margin reads like a document. -->
+                <StackPanel Margin="40,40,40,40" MaxWidth="760" HorizontalAlignment="Left">
+                    <TextBlock Text="✂ Advanced Snip" FontSize="26" FontWeight="Bold"
+                               Foreground="{DynamicResource Brush.Text}"/>
+                    <TextBlock x:Name="AboutVersion" Text="Version 1.0 by Ankit Mishra"
+                               Foreground="{DynamicResource Brush.TextFaint}" FontSize="13" Margin="0,4,0,20"/>
+
+                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Brush.Text}" FontSize="13" LineHeight="22">
+                        A lightweight tray app for power users who capture, annotate and search
+                        screenshots constantly. No cloud, no telemetry, no subscription.
+                    </TextBlock>
+
+                    <TextBlock Text="Capture" FontSize="14" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Brush.Accent}" Margin="0,24,0,10"/>
+                    <StackPanel>
+                        <TextBlock Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   Text="• Region snip — drag a rectangle or click a window; magnifier shows exact pixel coordinates"/>
+                        <TextBlock Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   Text="• Scroll capture — point at any scrollable area and get all of it stitched into one image"/>
+                        <TextBlock Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   Text="• Auto-saves every capture; click the tray notification to open it in the editor"/>
+                    </StackPanel>
+
+                    <TextBlock Text="Clipboard history" FontSize="14" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Brush.Accent}" Margin="0,24,0,10"/>
+                    <StackPanel>
+                        <TextBlock Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   Text="• Keeps the last N captures in memory (default 8, configurable in Settings)"/>
+                        <TextBlock Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   Text="• Thumbnail HUD — navigate with arrow keys or the mouse wheel, Enter to paste"/>
+                        <TextBlock Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   Text="• Cycle next/previous and paste without opening the HUD"/>
+                    </StackPanel>
+
+                    <TextBlock Text="Editor" FontSize="14" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Brush.Accent}" Margin="0,24,0,10"/>
+                    <StackPanel>
+                        <TextBlock Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   Text="• Crop, rotate, flip, pen, highlighter, rectangle, ellipse, arrow, redact"/>
+                        <TextBlock Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   Text="• Select text (T) — drag across words on the image to copy them, like selecting in a PDF"/>
+                        <TextBlock Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   Text="• Copy text — reads all text using the built-in Windows OCR engine; no cloud or model needed"/>
+                        <TextBlock Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   Text="• Remove background — makes a flat background transparent with edge feathering"/>
+                        <TextBlock Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   Text="• Export as PNG, JPEG, BMP, TIFF or ICO (all standard icon sizes in one file)"/>
+                        <TextBlock Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   Text="• Open any image by dragging it onto the window, Ctrl+O, or via the tray menu"/>
+                        <TextBlock Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   Text="• 24-step undo, Ctrl+scroll zoom"/>
+                    </StackPanel>
+
+                    <TextBlock Text="Gallery" FontSize="14" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Brush.Accent}" Margin="0,24,0,10"/>
+                    <StackPanel>
+                        <TextBlock Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   Text="• Browse all saved captures; fast even at tens of thousands of files"/>
+                        <TextBlock Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   Text="• Search by filename or by words inside the images (OCR index cached between sessions)"/>
+                        <TextBlock Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   Text="• Filter by date — today, yesterday, last 7/30 days, this year, or a custom range"/>
+                        <TextBlock Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   Text="• Sort by capture time, name or file size; multi-select; delete to Recycle Bin"/>
+                    </StackPanel>
+
+                    <TextBlock Text="Default hotkeys" FontSize="14" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Brush.Accent}" Margin="0,24,0,10"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="240"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Region snip"             Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="Ctrl+Shift+S"            Foreground="{DynamicResource Brush.Accent}" FontSize="13" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Scroll capture"          Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="Ctrl+Shift+W"            Foreground="{DynamicResource Brush.Accent}" FontSize="13" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Clipboard history HUD"   Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="Ctrl+Shift+V"            Foreground="{DynamicResource Brush.Accent}" FontSize="13" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Next image + paste"      Foreground="{DynamicResource Brush.Text}" FontSize="13" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="Ctrl+Shift+."            Foreground="{DynamicResource Brush.Accent}" FontSize="13" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Previous image + paste"  Foreground="{DynamicResource Brush.Text}" FontSize="13"/>
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="Ctrl+Shift+,"            Foreground="{DynamicResource Brush.Accent}" FontSize="13"/>
+                    </Grid>
+
+                    <TextBlock Text="Notes" FontSize="14" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Brush.Accent}" Margin="0,24,0,10"/>
+                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Brush.Text}" FontSize="13" LineHeight="22">
+                        Scroll capture measures how far the content actually moved between each
+                        screenful rather than assuming a step size, so the seams line up whether the
+                        target is a web page, a file list or a document. It detects the real
+                        scrolling area too, which keeps toolbars and sticky headers from repeating
+                        down the finished image. Leave the mouse and keyboard alone while it runs.
+                    </TextBlock>
+                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Brush.Text}" FontSize="13" LineHeight="22" Margin="0,12,0,0">
+                        The app is per-monitor DPI aware, so captures stay sharp and crops land
+                        exactly where you drew them on any mix of displays and scale factors.
+                    </TextBlock>
+                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Brush.Text}" FontSize="13" LineHeight="22" Margin="0,12,0,0">
+                        Paste injection works by setting the clipboard and sending Ctrl+V to the
+                        previous window. A few apps restrict programmatic focus — if a paste doesn't
+                        land, the image is still on the clipboard and a manual Ctrl+V will work.
+                    </TextBlock>
+                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Brush.Text}" FontSize="13" LineHeight="22" Margin="0,12,0,0">
+                        Text search uses the Windows OCR engine — no internet needed. Add language
+                        packs under Settings → Time &amp; language → Language &amp; region → your
+                        language → Language options → Optical character recognition.
+                    </TextBlock>
+                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Brush.Text}" FontSize="13" LineHeight="22" Margin="0,12,0,0">
+                        Start with Windows is verified at every launch — the app detects if the entry
+                        was moved, broken or disabled in Task Manager, and reports it in Settings.
+                    </TextBlock>
+                </StackPanel>
+            </ScrollViewer>
+
+        </Grid><!-- end content area -->
+        </Grid><!-- end sidebar + content row -->
+    </Grid>
+</Window>
