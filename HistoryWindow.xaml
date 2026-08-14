@@ -12,38 +12,50 @@
         WindowStartupLocation="Manual"
         PreviewMouseWheel="Window_PreviewMouseWheel">
 
-    <Border CornerRadius="12"
-            Background="#F01D2027"
-            BorderBrush="#33FFFFFF"
+    <!-- **Themed, unlike the other floating panels.**
+         The recording toolbar, the tool picker and the scroll-capture progress panel are
+         still fixed dark: they are on screen *during* a capture, over arbitrary content,
+         and two of them share the screen at once. The clipboard HUD is different in kind —
+         you open it deliberately, from this app, to look at this app's own contents, so it
+         reading as part of the app matters more than it standing apart from the desktop.
+         The border and the shadow are kept strong so it still has an edge on a light
+         background, which was the original worry. -->
+    <Border CornerRadius="14"
+            Background="{DynamicResource Brush.Card}"
+            BorderBrush="{DynamicResource Brush.BorderStrong}"
             BorderThickness="1"
-            Padding="14">
+            Padding="16,14">
         <Border.Effect>
-            <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.5" Color="Black" />
+            <DropShadowEffect BlurRadius="30" ShadowDepth="4" Opacity="0.38" Color="Black" />
         </Border.Effect>
 
-        <StackPanel MinWidth="360" MaxWidth="900">
+        <StackPanel MinWidth="360" MaxWidth="920">
             <DockPanel Margin="2,0,2,10">
                 <TextBlock Text="Clipboard history"
-                           Foreground="White"
+                           Foreground="{DynamicResource Brush.Accent}"
                            FontFamily="Segoe UI"
                            FontWeight="SemiBold"
-                           FontSize="13" />
+                           FontSize="13"
+                           VerticalAlignment="Center" />
                 <TextBlock x:Name="HintText"
                            DockPanel.Dock="Right"
                            HorizontalAlignment="Right"
-                           Text="← →  or  wheel navigate   ·   Enter paste   ·   Esc close"
-                           Foreground="#99FFFFFF"
+                           VerticalAlignment="Center"
+                           Text="← → scroll  ·  right-click preview &amp; edit  ·  Enter paste  ·  Esc close"
+                           Foreground="{DynamicResource Brush.TextBody}"
                            FontFamily="Segoe UI"
-                           FontSize="11" />
+                           FontSize="11.5" />
             </DockPanel>
 
             <ListBox x:Name="Thumbs"
                      Background="Transparent"
                      BorderThickness="0"
+                     FocusVisualStyle="{x:Null}"
                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
                      ScrollViewer.VerticalScrollBarVisibility="Disabled"
                      SelectionChanged="Thumbs_SelectionChanged"
                      MouseDoubleClick="Thumbs_MouseDoubleClick"
+                     PreviewMouseRightButtonDown="Thumbs_RightClick"
                      KeyDown="Thumbs_KeyDown">
                 <ListBox.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -53,26 +65,35 @@
 
                 <ListBox.ItemContainerStyle>
                     <Style TargetType="ListBoxItem">
-                        <Setter Property="Margin" Value="4" />
+                        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                        <Setter Property="Margin" Value="4,2" />
                         <Setter Property="Padding" Value="0" />
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="ListBoxItem">
                                     <Border x:Name="Chrome"
                                             CornerRadius="8"
-                                            Background="#22FFFFFF"
-                                            BorderBrush="Transparent"
+                                            Background="{DynamicResource Brush.Subtle}"
+                                            BorderBrush="{DynamicResource Brush.Border}"
                                             BorderThickness="2"
-                                            Padding="6">
+                                            Padding="5"
+                                            Cursor="Hand">
+                                        <Border.Effect>
+                                            <DropShadowEffect BlurRadius="6" ShadowDepth="1"
+                                                              Opacity="0.08" Color="Black"/>
+                                        </Border.Effect>
                                         <ContentPresenter />
                                     </Border>
                                     <ControlTemplate.Triggers>
-                                        <Trigger Property="IsSelected" Value="True">
-                                            <Setter TargetName="Chrome" Property="BorderBrush" Value="#FF3B82F6" />
-                                            <Setter TargetName="Chrome" Property="Background" Value="#333B82F6" />
-                                        </Trigger>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Chrome" Property="Background" Value="#33FFFFFF" />
+                                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Hover}" />
+                                            <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}" />
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource Brush.Accent}" />
+                                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.AccentSoft}" />
+                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource Brush.Accent}" />
+                                            <Setter Property="TextElement.FontWeight" Value="Bold" />
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
@@ -84,29 +105,31 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <StackPanel Width="160">
-                            <Border CornerRadius="4" ClipToBounds="True" Background="#22000000">
-                                <Image Source="{Binding Image}"
+                            <Border CornerRadius="6" ClipToBounds="True" Background="{DynamicResource Brush.Subtle}">
+                                <Image Source="{Binding Thumb}"
                                        Height="110"
                                        Stretch="Uniform"
                                        RenderOptions.BitmapScalingMode="HighQuality" />
                             </Border>
                             <TextBlock Text="{Binding Caption}"
-                                       Foreground="#CCFFFFFF"
+                                       Foreground="{DynamicResource Brush.TextMuted}"
                                        FontFamily="Segoe UI"
                                        FontSize="11"
+                                       FontWeight="Medium"
                                        HorizontalAlignment="Center"
-                                       Margin="0,6,0,0" />
+                                       Margin="0,6,0,2" />
                         </StackPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
 
             <TextBlock x:Name="EmptyText"
-                       Text="No snips yet — press your snip hotkey to capture one."
-                       Foreground="#99FFFFFF"
+                       Text="No snips yet — take one with your snip hotkey."
+                       Foreground="{DynamicResource Brush.TextMuted}"
                        FontFamily="Segoe UI"
                        FontSize="12"
-                       Margin="4,10,4,6"
+                       Margin="12,18,12,12"
+                       HorizontalAlignment="Center"
                        Visibility="Collapsed" />
         </StackPanel>
     </Border>

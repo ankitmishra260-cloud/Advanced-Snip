@@ -1,0 +1,91 @@
+<!--
+    Emerald Matrix (Cyber-Green) Theme.
+    Bioluminescent cyber-emerald and radiant mint against deep velvet obsidian.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:po="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    mc:Ignorable="po">
+
+    <!-- Surfaces: Radial spotlight ambient emerald diffusion on velvet onyx -->
+    <RadialGradientBrush x:Key="Brush.Window" Center="0.15,0.0" GradientOrigin="0.15,0.0" RadiusX="1.3" RadiusY="1.4" po:Freeze="True">
+        <GradientStop Offset="0.00" Color="#FF102A20"/>
+        <GradientStop Offset="0.28" Color="#FF0B1D16"/>
+        <GradientStop Offset="0.60" Color="#FF07120E"/>
+        <GradientStop Offset="1.00" Color="#FF040806"/>
+    </RadialGradientBrush>
+
+    <RadialGradientBrush x:Key="Brush.Sidebar" Center="0.5,0.0" GradientOrigin="0.5,0.0" RadiusX="1.4" RadiusY="1.1" po:Freeze="True">
+        <GradientStop Offset="0.00" Color="#FF0E241B"/>
+        <GradientStop Offset="0.45" Color="#FF091712"/>
+        <GradientStop Offset="1.00" Color="#FF050A08"/>
+    </RadialGradientBrush>
+
+    <!-- Active Navigation Pill: 5-stop radiant neon emerald-mint beam -->
+    <LinearGradientBrush x:Key="Brush.NavActive" StartPoint="0,0" EndPoint="1,0" po:Freeze="True">
+        <GradientStop Offset="0.00" Color="#FF00F59B"/>
+        <GradientStop Offset="0.22" Color="#FF059669"/>
+        <GradientStop Offset="0.55" Color="#FF047857"/>
+        <GradientStop Offset="0.85" Color="#FF06251B"/>
+        <GradientStop Offset="1.00" Color="#0006251B"/>
+    </LinearGradientBrush>
+
+    <!-- Cards: Specular top-lit obsidian emerald tiles -->
+    <LinearGradientBrush x:Key="Brush.Card" StartPoint="0,0" EndPoint="0,1" po:Freeze="True">
+        <GradientStop Offset="0.00" Color="#FF11241C"/>
+        <GradientStop Offset="0.08" Color="#FF0D1B15"/>
+        <GradientStop Offset="0.90" Color="#FF08120E"/>
+        <GradientStop Offset="1.00" Color="#FF050A08"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Brush.Input" StartPoint="0,0" EndPoint="0,1" po:Freeze="True">
+        <GradientStop Offset="0.0" Color="#FF132920"/>
+        <GradientStop Offset="1.0" Color="#FF0A1712"/>
+    </LinearGradientBrush>
+
+    <SolidColorBrush x:Key="Brush.Subtle" Color="#FF060D0A" po:Freeze="True"/>
+
+    <!-- Hover: Radial bioluminescent mint aura glow -->
+    <RadialGradientBrush x:Key="Brush.Hover" Center="0.5,0.5" GradientOrigin="0.5,0.5" RadiusX="0.75" RadiusY="0.75" po:Freeze="True">
+        <GradientStop Offset="0.00" Color="#6600F59B"/>
+        <GradientStop Offset="0.70" Color="#4D059669"/>
+        <GradientStop Offset="1.00" Color="#26047857"/>
+    </RadialGradientBrush>
+
+    <!-- Window Edge: Glowing emerald-mint border -->
+    <LinearGradientBrush x:Key="Brush.WindowEdge" StartPoint="0,0" EndPoint="1,1" po:Freeze="True">
+        <GradientStop Offset="0.00" Color="#FF00F59B"/>
+        <GradientStop Offset="0.50" Color="#FF10B981"/>
+        <GradientStop Offset="1.00" Color="#FF34D399"/>
+    </LinearGradientBrush>
+
+    <!-- Lines & structural borders -->
+    <SolidColorBrush x:Key="Brush.Border"       Color="#FF183829" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.BorderInput"  Color="#FF234D38" po:Freeze="True"/>
+
+    <LinearGradientBrush x:Key="Brush.BorderStrong" StartPoint="0,0" EndPoint="1,0.8" po:Freeze="True">
+        <GradientStop Offset="0.00" Color="#FF00F59B"/>
+        <GradientStop Offset="0.50" Color="#FF34D399"/>
+        <GradientStop Offset="1.00" Color="#FF047857"/>
+    </LinearGradientBrush>
+
+    <!-- Typography: pure diamond white & glowing high-contrast cool mint -->
+    <SolidColorBrush x:Key="Brush.Text"         Color="#FFFFFFFF" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextHeading"  Color="#FFF0FDF4" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextBody"     Color="#FFE2F1E8" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextFaint"    Color="#FFA7D3BA" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextMuted"    Color="#FF86B99D" po:Freeze="True"/>
+
+    <!-- Accent + status: bioluminescent emerald, bright mint hover, solar warning -->
+    <SolidColorBrush x:Key="Brush.Accent"       Color="#FF00F59B" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.AccentHover"  Color="#FF34D399" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.AccentSoft"   Color="#FF043321" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.OnAccent"     Color="#FF02140D" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Success"      Color="#FF00F59B" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Warning"      Color="#FFFBBF24" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Danger"       Color="#FFF43F5E" po:Freeze="True"/>
+
+    <!-- Editor canvas backdrop -->
+    <SolidColorBrush x:Key="Brush.CanvasBack"   Color="#FF060D0A" po:Freeze="True"/>
+</ResourceDictionary>

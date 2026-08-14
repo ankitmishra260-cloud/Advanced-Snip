@@ -98,8 +98,10 @@ namespace AdvancedSnip.Services
             bool focused = WindowFinder.BringToFront(_req.TopLevelHwnd);
             await Task.Delay(220, _token).ConfigureAwait(false);
 
+            // Deliberately not parking the cursor here. The driver takes the pointer only
+            // if it has to fall back to a physically injected wheel, and most windows
+            // never make it do that — so for most captures the mouse stays free.
             var driver = new ScrollDriver(_req.TargetHwnd, region);
-            driver.ParkCursor();
 
             UiaScroll? uia = null;
             double originalPercent = -1;
@@ -200,32 +202,31 @@ namespace AdvancedSnip.Services
             Report(0, 0, 2, "Capturing the first screen\u2026");
             var first = await CaptureSettledAsync(region).ConfigureAwait(false);
 
-            // ── Probe: one small scroll tells us three things at once — whether this
-            //    thing scrolls at all, how far one notch moves it, and exactly which rows
-            //    are the scrolling viewport.
+            // ── Probe: scroll a few notches so movement is unmistakable across whitespace and high-DPI.
             CaptureFrame? probe = null;
             int pxPerNotch = 0;
+            const int probeNotches = 3;
 
             for (int attempt = 0; attempt < 3; attempt++)
             {
                 _token.ThrowIfCancellationRequested();
 
-                driver.Scroll(1);
+                driver.Scroll(probeNotches);
                 probe?.Dispose();
                 probe = await CaptureSettledAsync(region).ConfigureAwait(false);
 
                 var shift = ScrollMatcher.MeasureShift(first, probe, 0, region.Height, -1);
                 if (shift.Confident && shift.Delta > 0)
                 {
-                    pxPerNotch = shift.Delta;
+                    pxPerNotch = Math.Max(1, (int)Math.Round((double)shift.Delta / probeNotches));
                     break;
                 }
 
                 // Nothing moved. Either this region doesn't scroll, or this app ignores
-                // the way we're sending the scroll — try the next delivery method.
+                // the current delivery method — try the next delivery method.
                 if (!driver.TryNextMethod()) break;
                 Report(0, 0, 3, $"Trying {driver.MethodName}\u2026");
-                await Task.Delay(120, _token).ConfigureAwait(false);
+                await Task.Delay(140, _token).ConfigureAwait(false);
             }
 
             if (pxPerNotch <= 0)
@@ -416,6 +417,9 @@ namespace AdvancedSnip.Services
         /// </summary>
         private async Task<CaptureFrame> CaptureSettledAsync(Rectangle region)
         {
+            // Give smooth scroll physics (DirectComposition/DWM) an initial moment to initiate/decelerate
+            await Task.Delay(_settlePollMs, _token).ConfigureAwait(false);
+
             var frame = CaptureFrame.Grab(region);
             var sw = Stopwatch.StartNew();
 

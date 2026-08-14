@@ -1,0 +1,225 @@
+<Window x:Class="AdvancedSnip.RecordHudWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Recording"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight"
+        WindowStartupLocation="Manual"
+        FontFamily="Segoe UI">
+
+    <Window.Resources>
+        <Style x:Key="HudBtn" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="#22FFFFFF"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Margin" Value="3,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" CornerRadius="6"
+                                Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#44FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Chrome" Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The current-tool chip is a button, not a label. Someone looking at "Pen" and
+             wanting something else clicks it; making that do nothing and requiring them to
+             find a separate button is the sort of small refusal that adds up over an hour. -->
+        <Style x:Key="HudChip" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="6,0,0,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" CornerRadius="4" Background="#333B82F6"
+                                Padding="8,3">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#553B82F6"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HudToggle" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Margin" Value="3,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Chrome" CornerRadius="6" Background="#22FFFFFF"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#44FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#FF3B82F6"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <!-- Floating-panel chrome. Shared with the recording toolbar, the tool picker, the
+         clipboard HUD, its preview and the scroll-capture progress panel: these all
+         float over whatever is on screen, so they are fixed dark rather than themed —
+         a light panel over a light desktop has no edge. Kept identical across the five
+         because two of them share the screen during a recording. -->
+    <Border CornerRadius="12" Background="#F21D2027"
+            BorderBrush="#33FFFFFF" BorderThickness="1"
+            Padding="12,9"
+            MouseLeftButtonDown="Hud_Drag">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="20" ShadowDepth="3" Opacity="0.55" Color="Black"/>
+        </Border.Effect>
+
+        <StackPanel Orientation="Vertical">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+
+            <Ellipse x:Name="RecDot" Width="10" Height="10" Fill="#FFEF4444"
+                     VerticalAlignment="Center" Margin="2,0,8,0"/>
+
+            <TextBlock x:Name="ClockText" Text="0:00" Foreground="White"
+                       FontSize="14" FontWeight="SemiBold" MinWidth="46"
+                       VerticalAlignment="Center"/>
+
+            <TextBlock x:Name="SizeText" Text="" Foreground="#99FFFFFF"
+                       FontSize="11" MinWidth="62" Margin="6,0,4,0"
+                       VerticalAlignment="Center"/>
+
+            <!-- Sound level. A recorder that shows no sign of hearing anything is one
+                 you only discover was muted after the take is over, so the meter is on
+                 the toolbar rather than buried in settings. -->
+            <Border x:Name="AudioChip" Background="#22FFFFFF" CornerRadius="5"
+                    Padding="7,3" Margin="0,0,6,0" VerticalAlignment="Center"
+                    Visibility="Collapsed"
+                    ToolTip="Sound level. Mute with Ctrl+Shift+U.">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="AudioGlyph" Text="&#x1F50A;" FontSize="11"
+                               Foreground="#FFD1D5DB" VerticalAlignment="Center"
+                               Margin="0,0,6,0"/>
+                    <Border Width="46" Height="6" CornerRadius="3" Background="#33000000"
+                            VerticalAlignment="Center">
+                        <Border x:Name="AudioLevelBar" Width="0" Height="6" CornerRadius="3"
+                                HorizontalAlignment="Left" Background="#FF22C55E"/>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Border x:Name="ZoomChip" Background="#333B82F6" CornerRadius="4"
+                    Padding="7,2" Margin="0,0,6,0" VerticalAlignment="Center"
+                    Visibility="Collapsed">
+                <TextBlock x:Name="ZoomText" Text="2x" Foreground="#FF93C5FD"
+                           FontSize="11" FontWeight="SemiBold"/>
+            </Border>
+
+            <Rectangle Width="1" Fill="#33FFFFFF" Margin="4,2,8,2"/>
+
+            <Button x:Name="PauseBtn" Style="{StaticResource HudBtn}"
+                    Content="Pause" Click="Pause_Click"/>
+            <Button x:Name="StopBtn" Style="{StaticResource HudBtn}"
+                    Content="Stop" Background="#FFEF4444" Click="Stop_Click"/>
+
+            <Rectangle Width="1" Fill="#33FFFFFF" Margin="8,2,4,2"/>
+
+            <!-- One button opens the tool picker at the pointer. The old row of pen
+                 controls lived here and meant a round trip to the bottom of the screen
+                 for every tool change; this is the same idea one keypress away from
+                 wherever the hand already is. -->
+            <Button x:Name="ToolsBtn" Style="{StaticResource HudBtn}"
+                    Content="&#x270E;  Tools" Click="Tools_Click"
+                    ToolTip="Open the tool picker at the pointer (Ctrl+Shift+A). Pin it there to keep it open."/>
+
+            <Button x:Name="ToolChip" Style="{StaticResource HudChip}"
+                    VerticalAlignment="Center" Visibility="Collapsed"
+                    Click="Tools_Click"
+                    ToolTip="The tool the pointer is using. Click to change it.">
+                <StackPanel Orientation="Horizontal">
+                    <Ellipse x:Name="ToolDot" Width="9" Height="9" Margin="0,0,6,0"
+                             VerticalAlignment="Center" Fill="#FFEF4444"/>
+                    <TextBlock x:Name="ToolText" Text="Pen" Foreground="#FFBFDBFE"
+                               FontSize="11" FontWeight="SemiBold"/>
+                </StackPanel>
+            </Button>
+
+            <!-- Undo and Clear are always here and merely go dim, rather than appearing and
+                 disappearing. They used to be shown only while a tool was active, which put
+                 them out of reach in exactly the moment they are wanted: the drawings stay
+                 on screen after Escape, so someone who had finished annotating and gone
+                 back to clicking things had marks over their demo and nothing to press.
+                 Keeping them in one place also stops the toolbar changing width underneath
+                 the pointer that is reaching for them. -->
+            <StackPanel x:Name="EditTools" Orientation="Horizontal"
+                        VerticalAlignment="Center">
+                <Button x:Name="UndoInkBtn" Style="{StaticResource HudBtn}"
+                        Content="Undo" Click="UndoInk_Click" IsEnabled="False"
+                        ToolTip="Remove the last thing drawn (Ctrl+Shift+Z)"/>
+                <Button x:Name="ClearInkBtn" Style="{StaticResource HudBtn}"
+                        Content="Clear" Click="ClearInk_Click" IsEnabled="False"
+                        ToolTip="Erase everything drawn (Ctrl+Shift+E). Undo brings it back."/>
+                <Button x:Name="DoneBtn" Style="{StaticResource HudBtn}"
+                        Content="Done" Click="Done_Click" Visibility="Collapsed"
+                        ToolTip="Put the tools away and use the screen normally (Esc)"/>
+            </StackPanel>
+
+            <Button x:Name="KeysBtn" Style="{StaticResource HudBtn}" Content="?"
+                    Margin="8,0,0,0" Click="Keys_Click"
+                    ToolTip="Show the shortcuts available while recording"/>
+        </StackPanel>
+
+        <!-- The legend lives inside the HUD rather than in a dialog on purpose: this
+             window is excluded from capture, so it can be opened mid-recording without
+             appearing in the video. A MessageBox would be recorded. -->
+        <Border x:Name="KeysPanel" Visibility="Collapsed" Margin="2,10,2,0"
+                Background="#22FFFFFF" CornerRadius="8" Padding="12,9">
+            <TextBlock Foreground="#DDFFFFFF" FontSize="11.5" LineHeight="19"
+                       FontFamily="Consolas, Segoe UI">
+                <Run Foreground="#FF93C5FD">While the pen or marker is out, you rarely need to change tool at all:</Run><LineBreak/>
+                hold Shift&#8195;line&#8195;&#183;&#8195;Ctrl&#8195;arrow&#8195;&#183;&#8195;Ctrl+Shift&#8195;box&#8195;&#8212; just for that stroke<LineBreak/>
+                wheel&#8195;stroke width&#8195;&#183;&#8195;Shift+wheel&#8195;colour&#8195;&#183;&#8195;Ctrl+wheel&#8195;zoom<LineBreak/>
+                <LineBreak/>
+                Ctrl+Shift+A&#8195;tool picker at the pointer&#8195;&#183;&#8195;Ctrl+Shift+R&#8195;stop<LineBreak/>
+                Ctrl+Shift+P&#8195;pen&#8195;&#183;&#8195;Ctrl+Shift+M&#8195;marker&#8195;&#183;&#8195;Ctrl+Shift+X&#8195;arrow<LineBreak/>
+                Ctrl+Shift+F&#8195;spotlight&#8195;&#183;&#8195;Ctrl+Shift+B&#8195;hide&#8195;&#183;&#8195;Ctrl+Shift+N&#8195;step<LineBreak/>
+                Ctrl+Shift+[ ]&#8195;previous / next tool&#8195;&#183;&#8195;Ctrl+Shift+U&#8195;mute<LineBreak/>
+                Ctrl+Shift+Z&#8195;undo&#8195;&#183;&#8195;Ctrl+Shift+E&#8195;erase all (undo brings it back)<LineBreak/>
+                Ctrl+Shift+ +&#8195;zoom in&#8195;&#183;&#8195;Ctrl+Shift+ -&#8195;zoom out&#8195;&#183;&#8195;Ctrl+Shift+0&#8195;reset<LineBreak/>
+                In the picker: 1&#8211;9 tool&#8195;&#183;&#8195;Shift+1&#8211;6 colour&#8195;&#183;&#8195;P pin&#8195;&#183;&#8195;0 or Esc away<LineBreak/>
+                Esc&#8195;leave the current tool&#8195;&#183;&#8195;right-click does the same<LineBreak/>
+                <Run Foreground="#AA93C5FD">The dashed outline shows what viewers see while zoomed. It is not recorded.</Run>
+            </TextBlock>
+        </Border>
+        </StackPanel>
+    </Border>
+</Window>

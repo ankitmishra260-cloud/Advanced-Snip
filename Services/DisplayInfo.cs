@@ -191,47 +191,41 @@ namespace AdvancedSnip.Services
         }
 
         /// <summary>
-        /// Parks a window somewhere that does not overlap <paramref name="avoid"/> —
-        /// preferring a different monitor, then the largest free corner.
+        /// Parks a window on the same monitor as <paramref name="avoid"/> —
+        /// selecting the corner with the most clearance (least overlap).
         /// </summary>
         internal static void PlaceAwayFrom(System.Windows.Window w, Rectangle avoid)
         {
-            var size = GetPhysicalRect(w);
-            if (size.Width <= 0) return;
-
-            var monitors = DisplayInfo.All();
-
-            // 1) A monitor that the captured region doesn't touch at all.
-            foreach (var m in monitors)
-            {
-                if (m.Bounds.IntersectsWith(avoid)) continue;
-                MoveTo(w,
-                    m.WorkArea.X + (m.WorkArea.Width - size.Width) / 2,
-                    m.WorkArea.Y + (m.WorkArea.Height - size.Height) / 2);
-                return;
-            }
-
-            // 2) Otherwise a corner of the region's own monitor with the most clearance.
             var host = DisplayInfo.FromRect(avoid);
             var wa = host.WorkArea;
-            var corners = new[]
-            {
-                new Point(wa.Right - size.Width - 16, wa.Bottom - size.Height - 16),
-                new Point(wa.X + 16,                  wa.Bottom - size.Height - 16),
-                new Point(wa.Right - size.Width - 16, wa.Y + 16),
-                new Point(wa.X + 16,                  wa.Y + 16),
-            };
+            int margin = (int)Math.Round(16 * host.Scale);
 
-            Point best = corners[0];
-            long bestOverlap = long.MaxValue;
-            foreach (var c in corners)
+            for (int pass = 0; pass < 2; pass++)
             {
-                var candidate = new Rectangle(c.X, c.Y, size.Width, size.Height);
-                var hit = Rectangle.Intersect(candidate, avoid);
-                long area = (long)hit.Width * hit.Height;
-                if (area < bestOverlap) { bestOverlap = area; best = c; }
+                var size = GetPhysicalRect(w);
+                if (size.Width <= 0) return;
+
+                var corners = new[]
+                {
+                    new Point(wa.Right - size.Width - margin, wa.Bottom - size.Height - margin),
+                    new Point(wa.X + margin,                  wa.Bottom - size.Height - margin),
+                    new Point(wa.Right - size.Width - margin, wa.Y + margin),
+                    new Point(wa.X + margin,                  wa.Y + margin),
+                };
+
+                Point best = corners[0];
+                long bestOverlap = long.MaxValue;
+                foreach (var c in corners)
+                {
+                    var candidate = new Rectangle(c.X, c.Y, size.Width, size.Height);
+                    var hit = Rectangle.Intersect(candidate, avoid);
+                    long area = (long)hit.Width * hit.Height;
+                    if (area < bestOverlap) { bestOverlap = area; best = c; }
+                }
+                int x = Math.Max(wa.X, best.X);
+                int y = Math.Max(wa.Y, best.Y);
+                MoveTo(w, x, y);
             }
-            MoveTo(w, best.X, best.Y);
         }
 
         /// <summary>

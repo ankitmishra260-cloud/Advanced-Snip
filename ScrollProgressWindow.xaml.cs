@@ -11,8 +11,8 @@ namespace AdvancedSnip
     ///
     /// Two things matter here beyond the progress bar. First, this window must never end
     /// up inside the captured image: it asks Windows to exclude it from screen capture and
-    /// also parks itself on a different monitor (or the emptiest corner) from the region
-    /// being captured. Second, "Stop &amp; keep" is separate from "Cancel" — on an
+    /// parks itself on the same monitor in the corner with the most clearance from the
+    /// region being captured. Second, "Stop &amp; keep" is separate from "Cancel" — on an
     /// infinite-scrolling page you want to end the run and still keep what was collected.
     /// </summary>
     public partial class ScrollProgressWindow : Window

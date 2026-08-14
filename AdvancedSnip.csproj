@@ -20,8 +20,39 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>AdvancedSnip</AssemblyName>
     <RootNamespace>AdvancedSnip</RootNamespace>
-    <Version>2.5.0</Version>
+    <!-- All four, deliberately. Setting <Version> alone leaves AssemblyVersion at
+         MSBuild's default of 1.0.0 — VersionPrefix is what feeds it, and VersionPrefix is
+         not derived from Version. The sidebar read "v1.0" for twenty-nine releases because
+         of that, which is exactly the kind of thing that costs a debugging round trip when
+         you need to know which build is in front of you. -->
+    <Version>2.0.0</Version>
+    <VersionPrefix>2.0.0</VersionPrefix>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <FileVersion>2.0.0.0</FileVersion>
     <LangVersion>latest</LangVersion>
+
+    <!-- Memory behaviour
+         This app routinely holds tens of megabytes of pixels behind objects the
+         collector thinks are tiny, so the defaults are stated explicitly rather
+         than inherited.
+
+         ServerGarbageCollection: off. Server GC gives every core its own heap with
+         a much larger allocation budget before it collects - excellent for a web
+         server, actively wrong for a tray utility, where on a 16-core machine it
+         can account for hundreds of megabytes of "used" memory on its own. It is
+         already the default for a WinExe; setting it here also guards against a
+         machine-wide DOTNET_gcServer=1 environment variable.
+
+         ConcurrentGarbageCollection: on, so gen-2 collections run on a background
+         thread instead of pausing the UI in the middle of a drag.
+
+         RetainVMGarbageCollection: off, so freed segments go back to the OS rather
+         than sitting on a standby list inside the process. This is the setting that
+         decides whether the number in Task Manager ever falls. -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
+    <TieredPGO>true</TieredPGO>
 	  <ApplicationIcon>ASico.ico</ApplicationIcon>
 
     <!-- WFAC010 asks for high-DPI to be configured by project property or
@@ -44,6 +75,17 @@
          so System.Windows.Automation needs no extra package. It is used only as an
          optional accuracy boost in scroll capture; everything still works without it. -->
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Tells the GC to favour a small footprint over raw throughput: it compacts the
+         large object heap more readily and hands memory back sooner. Every pixel buffer
+         and every PNG encode in this app is well past the 85 KB large-object threshold,
+         so the LOH is where its memory actually lives - and it is the one heap that is
+         otherwise swept but never compacted. Scale is 0-9; 5 is a deliberate middle.
+         If a capture ever feels slower than it used to, this is the first line to try
+         removing. -->
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Remove="ASico.ico" />

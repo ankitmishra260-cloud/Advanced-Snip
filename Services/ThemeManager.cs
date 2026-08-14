@@ -3,7 +3,7 @@ using Microsoft.Win32;
 
 namespace AdvancedSnip.Services
 {
-    internal enum ThemeChoice { System, Light, Dark }
+    internal enum ThemeChoice { System, Light, Dark, Cyberpunk, Sunset, DarkNeon, LightNeon, BlueNeon, BlueNeonLight, PrismAurora, EmeraldMatrix, SolarFlare, RoseQuartz, MidnightAmethyst }
 
     /// <summary>
     /// Owns the app's light/dark appearance.
@@ -38,9 +38,20 @@ namespace AdvancedSnip.Services
 
         internal static ThemeChoice Parse(string? value) => value switch
         {
-            "Light" => ThemeChoice.Light,
-            "Dark"  => ThemeChoice.Dark,
-            _       => ThemeChoice.System
+            "Light"                                  => ThemeChoice.Light,
+            "Dark"                                   => ThemeChoice.Dark,
+            "Cyberpunk"                              => ThemeChoice.Cyberpunk,
+            "Sunset"                                 => ThemeChoice.Sunset,
+            "DarkNeon" or "NeonDark"                 => ThemeChoice.DarkNeon,
+            "LightNeon"                              => ThemeChoice.LightNeon,
+            "BlueNeon"                               => ThemeChoice.BlueNeon,
+            "BlueNeonLight" or "LightBlueNeon"       => ThemeChoice.BlueNeonLight,
+            "PrismAurora" or "Aurora" or "Holo"      => ThemeChoice.PrismAurora,
+            "EmeraldMatrix" or "Emerald"             => ThemeChoice.EmeraldMatrix,
+            "SolarFlare" or "Solar"                  => ThemeChoice.SolarFlare,
+            "RoseQuartz" or "Rose"                   => ThemeChoice.RoseQuartz,
+            "MidnightAmethyst" or "Amethyst"         => ThemeChoice.MidnightAmethyst,
+            _                                        => ThemeChoice.System
         };
 
         internal static void Apply(string? settingValue) => Apply(Parse(settingValue));
@@ -50,22 +61,39 @@ namespace AdvancedSnip.Services
             _choice = choice;
             HookSystemChanges();
 
-            bool dark = choice switch
+            // Resolve to the dictionary name first, and derive darkness from it. The other
+            // way round stops working the moment there is more than one dark theme.
+            string leaf = choice switch
             {
-                ThemeChoice.Dark  => true,
-                ThemeChoice.Light => false,
-                _                 => SystemPrefersDark()
+                ThemeChoice.Light            => "Light",
+                ThemeChoice.Dark             => "Dark",
+                ThemeChoice.Cyberpunk        => "Cyberpunk",
+                ThemeChoice.Sunset           => "Sunset",
+                ThemeChoice.DarkNeon         => "DarkNeon",
+                ThemeChoice.LightNeon        => "LightNeon",
+                ThemeChoice.BlueNeon         => "BlueNeon",
+                ThemeChoice.BlueNeonLight    => "BlueNeonLight",
+                ThemeChoice.PrismAurora      => "PrismAurora",
+                ThemeChoice.EmeraldMatrix    => "EmeraldMatrix",
+                ThemeChoice.SolarFlare       => "SolarFlare",
+                ThemeChoice.RoseQuartz       => "RoseQuartz",
+                ThemeChoice.MidnightAmethyst => "MidnightAmethyst",
+                _                            => SystemPrefersDark() ? "Dark" : "Light"
             };
+
+            // Everything that is not a light theme is dark for the purposes of the title bar
+            bool dark = leaf != "Light" && leaf != "LightNeon" && leaf != "BlueNeonLight" && leaf != "RoseQuartz";
 
             var app = System.Windows.Application.Current;
             if (app == null) return;
 
-            // Swapping even when the value hasn't changed would throw away brush
-            // instances for no reason and make every open window re-render.
-            bool alreadyLoaded = _loadedDictionary != null && IsDark == dark;
-            if (alreadyLoaded) return;
+            // Guarded on the dictionary, not on IsDark. Comparing darkness would make
+            // switching Dark → Cyberpunk a no-op, since both are dark — the setting would
+            // change and the window would not.
+            if (_loadedDictionary != null && _loadedLeaf == leaf) return;
 
             IsDark = dark;
+            _loadedLeaf = leaf;
 
             // Full pack URI rather than a relative one. A bare relative Source depends on
             // an ambient base URI that isn't reliably present when loading from code, and
@@ -73,7 +101,6 @@ namespace AdvancedSnip.Services
             // can't silently break the theme.
             string asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Name
                          ?? "AdvancedSnip";
-            string leaf = dark ? "Dark" : "Light";
 
             var dict = new System.Windows.ResourceDictionary
             {
@@ -95,6 +122,9 @@ namespace AdvancedSnip.Services
         }
 
         private static System.Windows.ResourceDictionary? _loadedDictionary;
+
+        /// <summary>Which palette is loaded, so a switch between two dark ones is seen.</summary>
+        private static string? _loadedLeaf;
 
         /// <summary>
         /// Paints a window's title bar to match. Safe to call before the window is

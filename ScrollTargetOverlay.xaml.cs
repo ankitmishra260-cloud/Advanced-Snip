@@ -20,10 +20,24 @@ namespace AdvancedSnip
     {
         private readonly System.Drawing.Bitmap _screenshot;
         private readonly byte _dimAlpha;
+        private long _frozenBytes;
+
+        // Same reasoning as SnipOverlay: the picker redraws its dim layer on every mouse
+        // move, so the brush and the two rectangles are built once and mutated after that.
+        private readonly SolidColorBrush _dimBrush;
+        private readonly RectangleGeometry _dimOuter = new();
+        private readonly RectangleGeometry _dimHole = new();
+        private readonly GeometryGroup _dimGroup;
 
         private List<TargetCandidate> _candidates = new();
         private int _index;
         private System.Drawing.Point _lastCursor = new(int.MinValue, int.MinValue);
+
+        // Same reasoning as SnipOverlay: one overlay unit is one physical pixel, so the
+        // furniture drawn on top is measured in pixels and shrinks on a higher-scaled
+        // display. It is scaled to whichever monitor the pointer is on.
+        private double _uiScale = 1.0;
+        private System.Drawing.Rectangle _uiMonitor;
 
         /// <summary>The chosen target, or null when cancelled.</summary>
         public TargetCandidate? Result { get; private set; }
@@ -35,7 +49,18 @@ namespace AdvancedSnip
             _screenshot = screenshot;
             _dimAlpha = (byte)Math.Clamp((int)(dimOpacity / 100.0 * 255), 30, 200);
 
-            ScreenImage.Source = ImageInterop.ToFrozenBitmapSourceFast(_screenshot);
+            var frozen = ImageInterop.ToFrozenBitmapSourceAuto(_screenshot);
+            _frozenBytes = MemoryGuard.Track(frozen);
+            ScreenImage.Source = frozen;
+
+            _dimBrush = new SolidColorBrush(Color.FromArgb(_dimAlpha, 0, 0, 0));
+            _dimBrush.Freeze();
+            _dimGroup = new GeometryGroup { FillRule = FillRule.EvenOdd };
+            _dimGroup.Children.Add(_dimOuter);
+            _dimGroup.Children.Add(_dimHole);
+            DimPath.Fill = _dimBrush;
+            DimPath.Data = _dimGroup;
+
             OverlayHost.MakeVirtualScreenOverlay(this, RootGrid);
 
             Loaded += (_, _) =>
@@ -43,6 +68,7 @@ namespace AdvancedSnip
                 Activate();
                 Focus();
                 RootGrid.Focus();
+                UpdateUiScale();
                 RedrawDim(null);
                 PositionHintBar();
                 RefreshFromCursor(force: true);
@@ -119,6 +145,8 @@ namespace AdvancedSnip
         {
             if (!Win32.GetCursorPos(out var cur)) return;
 
+            UpdateUiScale();
+
             // Only re-resolve when the pointer has actually moved a few pixels; hit-testing
             // on every mouse message would enumerate windows far more often than needed.
             if (!force &&
@@ -157,6 +185,33 @@ namespace AdvancedSnip
             UpdateVisuals();
             PositionHintBar();
         }
+
+        /// <summary>
+        /// Re-points the picker's furniture at the display under the pointer. Everything
+        /// past the comparison is skipped unless the scale factor actually changed, so
+        /// this costs one comparison on the overwhelming majority of mouse moves.
+        /// </summary>
+        private void UpdateUiScale()
+        {
+            var mon = DisplayInfo.FromCursor();
+            _uiMonitor = mon.Bounds;
+
+            double s = mon.Scale;
+            if (double.IsNaN(s) || s < 0.05 || s > 20) s = 1.0;
+            if (Math.Abs(s - _uiScale) < 0.001) return;
+
+            _uiScale = s;
+            OverlayHost.ScaleChrome(HintBar, s);
+            OverlayHost.ScaleChrome(TipBorder, s);
+
+            // The highlight traces the target's real edges, so it is not scaled — only the
+            // weight of the line it is traced with.
+            HoverBorder.BorderThickness = new Thickness(Math.Max(1, Math.Round(3 * s)));
+        }
+
+        /// <summary>The monitor the furniture is currently sized for, in overlay units.</summary>
+        private Rect ChromeMonitor() => OverlayHost.ToLocalRect(
+            _uiMonitor.Width > 0 ? _uiMonitor : DisplayInfo.FromCursor().Bounds);
 
         private void UpdateVisuals()
         {
@@ -199,23 +254,26 @@ namespace AdvancedSnip
             TipBorder.Visibility = Visibility.Visible;
             TipBorder.UpdateLayout();
 
-            double w = TipBorder.ActualWidth > 0 ? TipBorder.ActualWidth : 380;
-            double h = TipBorder.ActualHeight > 0 ? TipBorder.ActualHeight : 96;
+            // ActualWidth/Height are in overlay units; the card is drawn through a
+            // RenderTransform, so its size on screen is that times the display's scale, and
+            // every clearance here is scaled with it.
+            double s = _uiScale;
+            double w = (TipBorder.ActualWidth > 0 ? TipBorder.ActualWidth : 380) * s;
+            double h = (TipBorder.ActualHeight > 0 ? TipBorder.ActualHeight : 96) * s;
 
             // Keep the card fully inside the monitor the pointer is on, not just inside
             // the overall desktop bounds — otherwise it can straddle a bezel.
-            var mon = DisplayInfo.FromPoint(screenX, screenY);
-            var monLocal = OverlayHost.ToLocalRect(mon.Bounds);
+            var monLocal = ChromeMonitor();
             var pt = OverlayHost.ToLocal(screenX, screenY);
 
-            double x = pt.X + 24;
-            double y = pt.Y + 24;
+            double x = pt.X + 24 * s;
+            double y = pt.Y + 24 * s;
 
-            if (x + w > monLocal.Right - 8) x = pt.X - w - 18;
-            if (y + h > monLocal.Bottom - 8) y = pt.Y - h - 18;
+            if (x + w > monLocal.Right - 8 * s) x = pt.X - w - 18 * s;
+            if (y + h > monLocal.Bottom - 8 * s) y = pt.Y - h - 18 * s;
 
-            x = Math.Max(monLocal.Left + 8, x);
-            y = Math.Max(monLocal.Top + 8, y);
+            x = Math.Max(monLocal.Left + 8 * s, x);
+            y = Math.Max(monLocal.Top + 8 * s, y);
 
             System.Windows.Controls.Canvas.SetLeft(TipBorder, x);
             System.Windows.Controls.Canvas.SetTop(TipBorder, y);
@@ -223,29 +281,33 @@ namespace AdvancedSnip
 
         private void PositionHintBar()
         {
-            var mon = DisplayInfo.FromCursor();
-            var local = OverlayHost.ToLocalRect(mon.Bounds);
-            HintBar.Margin = new Thickness(local.Left + (local.Width - HintBar.ActualWidth) / 2,
-                                           local.Top + 28, 0, 0);
+            var local = ChromeMonitor();
+            double drawnWidth = HintBar.ActualWidth * _uiScale;
+            HintBar.Margin = new Thickness(local.Left + Math.Max(0, (local.Width - drawnWidth) / 2),
+                                           local.Top + 28 * _uiScale, 0, 0);
         }
 
         private void RedrawDim(Rect? hole)
         {
-            DimPath.Fill = new SolidColorBrush(Color.FromArgb(_dimAlpha, 0, 0, 0));
+            _dimOuter.Rect = new Rect(0, 0, RootGrid.Width, RootGrid.Height);
+            _dimHole.Rect = hole is { Width: > 0, Height: > 0 } h ? h : Rect.Empty;
+        }
 
-            var full = new RectangleGeometry(new Rect(0, 0, RootGrid.Width, RootGrid.Height));
+        /// <summary>
+        /// Releases the desktop snapshot as soon as the picker is dismissed instead of
+        /// waiting for the window object to be collected. See SnipOverlay.OnClosed.
+        /// </summary>
+        protected override void OnClosed(EventArgs e)
+        {
+            base.OnClosed(e);
 
-            if (hole is { Width: > 0, Height: > 0 } h)
-            {
-                var group = new GeometryGroup { FillRule = FillRule.EvenOdd };
-                group.Children.Add(full);
-                group.Children.Add(new RectangleGeometry(h));
-                DimPath.Data = group;
-            }
-            else
-            {
-                DimPath.Data = full;
-            }
+            ScreenImage.Source = null;
+            DimPath.Data = null;
+            DimPath.Fill = null;
+
+            MemoryGuard.Release(_frozenBytes);
+            _frozenBytes = 0;
+            MemoryGuard.RequestTrim();
         }
     }
 }

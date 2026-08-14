@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Windows.Automation;
 
 namespace AdvancedSnip.Services
 {
@@ -34,7 +35,18 @@ namespace AdvancedSnip.Services
         private const string ChromiumContent = "Chrome_RenderWidgetHostHWND";
 
         internal static Rectangle WindowRect(IntPtr hwnd)
-            => Win32.GetWindowRect(hwnd, out var r) ? DisplayInfo.ToRect(r) : Rectangle.Empty;
+        {
+            try
+            {
+                if (Win32.DwmGetWindowAttribute(hwnd, Win32.DWMWA_EXTENDED_FRAME_BOUNDS, out Win32.RECT frame, System.Runtime.InteropServices.Marshal.SizeOf<Win32.RECT>()) == 0)
+                {
+                    var r = DisplayInfo.ToRect(frame);
+                    if (r.Width > 0 && r.Height > 0) return r;
+                }
+            }
+            catch { }
+            return Win32.GetWindowRect(hwnd, out var rc) ? DisplayInfo.ToRect(rc) : Rectangle.Empty;
+        }
 
         /// <summary>The client area of a window, expressed in screen coordinates.</summary>
         internal static Rectangle ClientRectOnScreen(IntPtr hwnd)
@@ -121,11 +133,112 @@ namespace AdvancedSnip.Services
         private static bool IsChromiumContent(IntPtr hwnd)
             => Win32.GetClass(hwnd).IndexOf("RenderWidgetHost", StringComparison.OrdinalIgnoreCase) >= 0;
 
+        private static bool IsContentPane(IntPtr hwnd, string cls)
+        {
+            if (IsChromiumContent(hwnd)) return true;
+            if (cls.StartsWith("_Ww", StringComparison.OrdinalIgnoreCase)) return true; // Microsoft Word (_WwG, _WwB, _WwF)
+            if (cls.Equals("EXCEL7", StringComparison.OrdinalIgnoreCase)) return true;  // Microsoft Excel
+            if (cls.IndexOf("Scintilla", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (cls.IndexOf("RichEdit", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (cls.IndexOf("Mozilla", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (cls.IndexOf("Document", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (cls.IndexOf("AVL_AVView", StringComparison.OrdinalIgnoreCase) >= 0) return true; // Adobe Acrobat
+            if (cls.IndexOf("Acrobat", StringComparison.OrdinalIgnoreCase) >= 0) return true;   // Adobe Acrobat
+            if (cls.IndexOf("SUMATRA", StringComparison.OrdinalIgnoreCase) >= 0) return true;   // SumatraPDF
+            if (cls.IndexOf("Foxit", StringComparison.OrdinalIgnoreCase) >= 0) return true;     // Foxit Reader
+            if (cls.IndexOf("PDF", StringComparison.OrdinalIgnoreCase) >= 0) return true;       // PDF viewers
+            if (cls.IndexOf("OneNote", StringComparison.OrdinalIgnoreCase) >= 0) return true;   // OneNote
+            if (cls.IndexOf("SUPERGRID", StringComparison.OrdinalIgnoreCase) >= 0) return true; // Outlook
+            if (cls.IndexOf("SunAwt", StringComparison.OrdinalIgnoreCase) >= 0) return true;    // JetBrains IDEs
+            if (cls.IndexOf("CASCADIA", StringComparison.OrdinalIgnoreCase) >= 0) return true;  // Windows Terminal
+            return false;
+        }
+
+        /// <summary>
+        /// Probes UI Automation for specific nested scrollable elements under the cursor
+        /// (e.g. scrollable tables, data grids, code snippets, overflow divs on a webpage).
+        /// </summary>
+        private static TargetCandidate? TryGetUiaScrollCandidate(int screenX, int screenY, IntPtr targetHwnd, IntPtr topLevel, Rectangle maxBounds)
+        {
+            if (targetHwnd == IntPtr.Zero || !Win32.IsWindow(targetHwnd)) return null;
+
+            try
+            {
+                var root = AutomationElement.FromHandle(targetHwnd);
+                if (root == null) return null;
+
+                var condition = new PropertyCondition(AutomationElement.IsScrollPatternAvailableProperty, true);
+                var matches = root.FindAll(TreeScope.Element | TreeScope.Children | TreeScope.Descendants, condition);
+                if (matches == null || matches.Count == 0) return null;
+
+                var pt = new System.Windows.Point(screenX, screenY);
+                AutomationElement? best = null;
+                double bestArea = double.MaxValue;
+                Rectangle bestRect = Rectangle.Empty;
+
+                foreach (AutomationElement el in matches)
+                {
+                    try
+                    {
+                        var rect = el.Current.BoundingRectangle;
+                        if (rect.IsEmpty || rect.Width < 60 || rect.Height < 40) continue;
+                        if (!rect.Contains(pt)) continue;
+
+                        var r = new Rectangle((int)Math.Round(rect.X), (int)Math.Round(rect.Y),
+                                              (int)Math.Round(rect.Width), (int)Math.Round(rect.Height));
+
+                        // Only consider true nested scrollable elements (smaller than the outer viewport)
+                        if (r.Width < maxBounds.Width - 12 || r.Height < maxBounds.Height - 12)
+                        {
+                            if (el.TryGetCurrentPattern(ScrollPattern.Pattern, out object patObj) &&
+                                patObj is ScrollPattern sp &&
+                                sp.Current.VerticallyScrollable)
+                            {
+                                double area = rect.Width * rect.Height;
+                                if (area < bestArea)
+                                {
+                                    bestArea = area;
+                                    best = el;
+                                    bestRect = r;
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                if (best != null && bestRect.Width > 0 && bestRect.Height > 0)
+                {
+                    string typeName = best.Current.ControlType.ProgrammaticName;
+                    string label = "Scrollable container";
+                    if (typeName.Contains("Table") || typeName.Contains("DataGrid") || typeName.Contains("Grid"))
+                        label = "Scrollable table";
+                    else if (typeName.Contains("List"))
+                        label = "Scrollable list";
+                    else if (typeName.Contains("Document"))
+                        label = "Document area";
+                    else if (!string.IsNullOrWhiteSpace(best.Current.LocalizedControlType))
+                        label = $"Scrollable {best.Current.LocalizedControlType.ToLowerInvariant()}";
+
+                    return new TargetCandidate
+                    {
+                        Hwnd = targetHwnd,
+                        TopLevel = topLevel,
+                        Region = bestRect,
+                        LikelyScrollable = true,
+                        Label = label
+                    };
+                }
+            }
+            catch { }
+            return null;
+        }
+
         /// <summary>
         /// Builds the list of things the user could mean by pointing here, ordered most
-        /// specific first: the deepest child, each ancestor up the chain, then the whole
-        /// window's content area, then the window including its title bar. The picker
-        /// lets the mouse wheel step through these.
+        /// specific first: nested scrollable containers (tables/grids), deepest child,
+        /// each ancestor up the chain, then the whole window's content area, then the
+        /// window including its title bar. The picker lets the mouse wheel step through these.
         /// </summary>
         internal static List<TargetCandidate> BuildCandidates(int screenX, int screenY)
         {
@@ -134,7 +247,16 @@ namespace AdvancedSnip.Services
             IntPtr top = HitTestTopLevel(screenX, screenY);
             if (top == IntPtr.Zero) return result;
 
+            var clientRect = ClientRectOnScreen(top);
             IntPtr deepest = DeepestChildAt(top, screenX, screenY);
+            IntPtr targetHwnd = deepest != IntPtr.Zero ? deepest : top;
+
+            // 1. Probe for nested scrollable elements (e.g. scrollable tables, data grids on webpages).
+            if (clientRect.Width > 0 && clientRect.Height > 0)
+            {
+                var uia = TryGetUiaScrollCandidate(screenX, screenY, targetHwnd, top, clientRect);
+                if (uia != null) Add(result, uia);
+            }
 
             // Walk from the deepest child back up to (but not including) the top level.
             var chain = new List<IntPtr>();
@@ -150,8 +272,9 @@ namespace AdvancedSnip.Services
                 var rect = ClientRectOnScreen(h);
                 if (rect.Width < 60 || rect.Height < 60) continue;
 
-                bool chromium = IsChromiumContent(h);
-                bool scrollable = chromium || HasVerticalScrollBar(h);
+                string cls = Win32.GetClass(h);
+                bool contentPane = IsContentPane(h, cls);
+                bool scrollable = contentPane || HasVerticalScrollBar(h);
 
                 Add(result, new TargetCandidate
                 {
@@ -159,11 +282,10 @@ namespace AdvancedSnip.Services
                     TopLevel = top,
                     Region = rect,
                     LikelyScrollable = scrollable,
-                    Label = chromium ? "Page content" : DescribeClass(Win32.GetClass(h))
+                    Label = IsChromiumContent(h) ? "Page content" : DescribeClass(cls)
                 });
             }
 
-            var clientRect = ClientRectOnScreen(top);
             if (clientRect.Width > 0)
             {
                 Add(result, new TargetCandidate
@@ -229,15 +351,22 @@ namespace AdvancedSnip.Services
         private static string DescribeClass(string cls)
         {
             if (string.IsNullOrWhiteSpace(cls)) return "Pane";
+            if (cls.StartsWith("_Ww", StringComparison.OrdinalIgnoreCase)) return "Word document";
+            if (cls.IndexOf("Acrobat", StringComparison.OrdinalIgnoreCase) >= 0 || cls.IndexOf("AVL_AVView", StringComparison.OrdinalIgnoreCase) >= 0 || cls.IndexOf("SUMATRA", StringComparison.OrdinalIgnoreCase) >= 0 || cls.IndexOf("PDF", StringComparison.OrdinalIgnoreCase) >= 0) return "PDF document";
+            if (cls.IndexOf("OneNote", StringComparison.OrdinalIgnoreCase) >= 0) return "OneNote page";
+            if (cls.IndexOf("SUPERGRID", StringComparison.OrdinalIgnoreCase) >= 0) return "Outlook view";
+            if (cls.IndexOf("SunAwt", StringComparison.OrdinalIgnoreCase) >= 0) return "Editor canvas";
+            if (cls.IndexOf("CASCADIA", StringComparison.OrdinalIgnoreCase) >= 0) return "Terminal";
             return cls switch
             {
+                "EXCEL7" => "Spreadsheet",
                 "SysListView32" => "List view",
                 "SysTreeView32" => "Tree view",
                 "DirectUIHWND" => "Explorer view",
-                "RICHEDIT50W" or "RichEdit20W" => "Rich text",
+                "RICHEDIT50W" or "RichEdit20W" or "RichEdit60W" => "Rich text",
                 "Edit" => "Text box",
                 "LISTBOX" => "List box",
-                "Scintilla" => "Editor",
+                "Scintilla" => "Code editor",
                 "MozillaWindowClass" or "MozillaCompositorWindowClass" => "Page content",
                 _ => cls.Length > 28 ? cls[..28] + "\u2026" : cls
             };

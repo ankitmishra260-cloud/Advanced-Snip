@@ -1,0 +1,195 @@
+<Window x:Class="AdvancedSnip.PdfViewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="PDF"
+        Width="1040" Height="780"
+        MinWidth="720" MinHeight="460"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="Segoe UI"
+        Background="{DynamicResource Brush.Window}"
+        Foreground="{DynamicResource Brush.Text}"
+        KeyDown="Window_KeyDown">
+
+    <Window.Resources>
+        <!-- Local copy. Window resources are not shared, so a key borrowed from another
+             window is a parse-time crash (ledger #10). -->
+        <Style x:Key="Ghost" TargetType="Button">
+            <Setter Property="Padding"      Value="10,6"/>
+            <Setter Property="Background"   Value="{DynamicResource Brush.Card}"/>
+            <Setter Property="Foreground"   Value="{DynamicResource Brush.TextBody}"/>
+            <Setter Property="BorderBrush"  Value="{DynamicResource Brush.BorderInput}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor"       Value="Hand"/>
+            <Setter Property="FontSize"     Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="6"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush"
+                                        Value="{DynamicResource Brush.Accent}"/>
+                                <Setter Property="Foreground"
+                                        Value="{DynamicResource Brush.Accent}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Field" TargetType="TextBox">
+            <Setter Property="Background"   Value="{DynamicResource Brush.Input}"/>
+            <Setter Property="Foreground"   Value="{DynamicResource Brush.Text}"/>
+            <Setter Property="CaretBrush"   Value="{DynamicResource Brush.Text}"/>
+            <Setter Property="BorderBrush"  Value="{DynamicResource Brush.BorderInput}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"      Value="7,4"/>
+            <Setter Property="FontSize"     Value="12.5"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ── toolbar ────────────────────────────────────────────────────── -->
+        <Border Grid.Row="0" Background="{DynamicResource Brush.Card}"
+                BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1"
+                Padding="12,8">
+            <DockPanel LastChildFill="False">
+                <Button x:Name="PrevBtn" DockPanel.Dock="Left" Style="{StaticResource Ghost}"
+                        Content="▲" Click="Prev_Click" ToolTip="Previous page (Page Up)"/>
+
+                <TextBox x:Name="PageBox" DockPanel.Dock="Left" Style="{StaticResource Field}"
+                         Width="46" Margin="6,0,4,0" TextAlignment="Center"
+                         KeyDown="PageBox_KeyDown" LostFocus="PageBox_LostFocus"
+                         ToolTip="Type a page number and press Enter"/>
+                <TextBlock x:Name="PageCountLabel" DockPanel.Dock="Left" Text="of —"
+                           VerticalAlignment="Center" FontSize="12.5" Margin="0,0,6,0"
+                           Foreground="{DynamicResource Brush.TextMuted}"/>
+
+                <Button x:Name="NextBtn" DockPanel.Dock="Left" Style="{StaticResource Ghost}"
+                        Content="▼" Click="Next_Click" ToolTip="Next page (Page Down)"/>
+
+                <TextBlock x:Name="FileLabel" DockPanel.Dock="Left" VerticalAlignment="Center"
+                           Margin="14,0,0,0" FontSize="12"
+                           TextTrimming="CharacterEllipsis" MaxWidth="200"
+                           Foreground="{DynamicResource Brush.TextMuted}"/>
+
+                <!-- Right-docked children stack right to left in declaration order. -->
+                <Button x:Name="OpenExternalBtn" DockPanel.Dock="Right"
+                        Style="{StaticResource Ghost}" Content="Open" Margin="6,0,0,0"
+                        Click="OpenExternal_Click" ToolTip="Open in the default PDF app"/>
+
+                <Button x:Name="ZoomInBtn" DockPanel.Dock="Right" Style="{StaticResource Ghost}"
+                        Content="+" Click="ZoomIn_Click" ToolTip="Zoom in (Ctrl + = / Ctrl + wheel)"/>
+                <!-- A real control rather than a label. Stepping to 400% six clicks at a
+                     time is not zooming, and "Fit width" / "Fit page" are the two settings
+                     people actually want and could not previously ask for. -->
+                <ComboBox x:Name="ZoomBox" DockPanel.Dock="Right" Width="106" Margin="6,0"
+                          SelectionChanged="ZoomBox_Changed" ToolTip="Zoom"/>
+                <Button x:Name="ZoomOutBtn" DockPanel.Dock="Right" Style="{StaticResource Ghost}"
+                        Content="−" Click="ZoomOut_Click" ToolTip="Zoom out (Ctrl + − / Ctrl + wheel)"/>
+
+                <Button x:Name="RotateBtn" DockPanel.Dock="Right" Style="{StaticResource Ghost}"
+                        Content="⟳" Margin="10,0,10,0" Click="Rotate_Click"
+                        ToolTip="Rotate the view 90° (R)"/>
+                <Button x:Name="SavePageBtn" DockPanel.Dock="Right" Style="{StaticResource Ghost}"
+                        Content="Save page" Click="SavePage_Click"
+                        ToolTip="Save this page as an image file"/>
+                <Button x:Name="CopyImageBtn" DockPanel.Dock="Right" Style="{StaticResource Ghost}"
+                        Content="Copy as Image" Margin="6,0" Click="CopyImage_Click"
+                        ToolTip="Copy this page to the clipboard as an image"/>
+                <Button x:Name="CopyTextBtn" DockPanel.Dock="Right" Style="{StaticResource Ghost}"
+                        Content="Copy text" Click="CopyText_Click"
+                        ToolTip="Copy the selected text, or the whole page (Ctrl+C)"/>
+                <Button x:Name="FindBtn" DockPanel.Dock="Right" Style="{StaticResource Ghost}"
+                        Content="Find" Margin="0,0,6,0" Click="Find_Click"
+                        ToolTip="Find on this page (Ctrl+F)"/>
+            </DockPanel>
+        </Border>
+
+        <!-- ── find bar ───────────────────────────────────────────────────── -->
+        <Border x:Name="FindBar" Grid.Row="1" Visibility="Collapsed"
+                Background="{DynamicResource Brush.Subtle}"
+                BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1"
+                Padding="12,7">
+            <DockPanel LastChildFill="False">
+                <TextBox x:Name="FindBox" DockPanel.Dock="Left" Style="{StaticResource Field}"
+                         Width="260" TextChanged="FindBox_TextChanged" KeyDown="FindBox_KeyDown"/>
+                <Button x:Name="FindPrevBtn" DockPanel.Dock="Left" Style="{StaticResource Ghost}"
+                        Content="◀" Margin="6,0,0,0" Click="FindPrev_Click"
+                        ToolTip="Previous match (Shift+F3)"/>
+                <Button x:Name="FindNextBtn" DockPanel.Dock="Left" Style="{StaticResource Ghost}"
+                        Content="▶" Margin="6,0,0,0" Click="FindNext_Click"
+                        ToolTip="Next match (Enter / F3)"/>
+                <TextBlock x:Name="MatchLabel" DockPanel.Dock="Left" VerticalAlignment="Center"
+                           Margin="12,0,0,0" FontSize="12.5"
+                           Foreground="{DynamicResource Brush.TextMuted}"/>
+                <Button x:Name="FindCloseBtn" DockPanel.Dock="Right" Style="{StaticResource Ghost}"
+                        Content="✕" Click="FindClose_Click" ToolTip="Close (Esc)"/>
+                <Button x:Name="FindAllPagesBtn" DockPanel.Dock="Right"
+                        Style="{StaticResource Ghost}" Content="Search other pages"
+                        Margin="0,0,6,0" Click="FindAllPages_Click"
+                        ToolTip="Read the rest of the document and stop at the next page containing this"/>
+            </DockPanel>
+        </Border>
+
+        <!-- ── pages ──────────────────────────────────────────────────────── -->
+        <ScrollViewer x:Name="PageScroller" Grid.Row="2"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Auto"
+                      Background="{DynamicResource Brush.Subtle}"
+                      PreviewMouseWheel="PageScroller_PreviewMouseWheel"
+                      ScrollChanged="PageScroller_ScrollChanged"
+                      CanContentScroll="False">
+            <Grid>
+                <TextBlock x:Name="StatusText" HorizontalAlignment="Center"
+                           VerticalAlignment="Center" FontSize="13"
+                           TextWrapping="Wrap" TextAlignment="Center" MaxWidth="520"
+                           Margin="16"
+                           Foreground="{DynamicResource Brush.TextMuted}"
+                           Text="Opening…"/>
+
+                <!-- One item per page, stacked. Not virtualised: CanContentScroll="False"
+                     is what gives smooth pixel scrolling instead of jumping a whole page
+                     per notch, and it rules out UI virtualisation. Instead each page holds
+                     only a placeholder until it comes near the viewport — the memory that
+                     matters is the decoded bitmaps, not the handful of elements. -->
+                <ItemsControl x:Name="PagesHost" Margin="0,16,0,16">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Vertical"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </Grid>
+        </ScrollViewer>
+
+        <!-- ── status strip ───────────────────────────────────────────────── -->
+        <Border Grid.Row="3" Background="{DynamicResource Brush.Card}"
+                BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,0,0"
+                Padding="12,6">
+            <TextBlock x:Name="ViewerStatus" FontSize="12"
+                       TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource Brush.TextMuted}"
+                       Text=""/>
+        </Border>
+    </Grid>
+</Window>

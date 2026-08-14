@@ -59,6 +59,20 @@ namespace AdvancedSnip.Services
             catch { return false; }
         }
 
+        internal bool TryScrollStep(int notches)
+        {
+            try
+            {
+                if (!_pattern.Current.VerticallyScrollable) return false;
+                var amount = notches > 0 ? ScrollAmount.SmallIncrement : ScrollAmount.SmallDecrement;
+                int count = Math.Min(Math.Abs(notches), 10);
+                for (int i = 0; i < count; i++)
+                    _pattern.Scroll(ScrollAmount.NoAmount, amount);
+                return true;
+            }
+            catch { return false; }
+        }
+
         /// <summary>
         /// Looks for the smallest scrollable element containing the point, searching only
         /// inside the target window's own subtree. Times out rather than hanging.

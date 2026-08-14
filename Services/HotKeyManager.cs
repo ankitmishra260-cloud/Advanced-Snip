@@ -49,9 +49,17 @@ namespace AdvancedSnip.Services
         }
 
         /// <summary>Registers a hotkey. Returns false if the combo is already taken globally.</summary>
-        public bool TryRegister(HotkeyDef def, Action callback)
+        public bool TryRegister(HotkeyDef def, Action callback) => Register(def, callback) != 0;
+
+        /// <summary>
+        /// Registers a hotkey and returns its id so it can be removed again later, or 0 if
+        /// registration failed. Used for keys that are only live for part of a session —
+        /// the Escape key that exits pen mode during a recording, for instance, which must
+        /// not stay claimed system-wide once the pen is off.
+        /// </summary>
+        public int Register(HotkeyDef def, Action callback)
         {
-            if (def == null || def.Key == 0) return false;
+            if (def == null || def.Key == 0) return 0;
 
             uint mods = MOD_NOREPEAT;
             var m = (ModifierKeys)def.Modifiers;
@@ -61,14 +69,21 @@ namespace AdvancedSnip.Services
             if (m.HasFlag(ModifierKeys.Windows)) mods |= MOD_WIN;
 
             uint vk = (uint)KeyInterop.VirtualKeyFromKey((Key)def.Key);
-            if (vk == 0) return false;
+            if (vk == 0) return 0;
 
             int id = ++_nextId;
             if (!RegisterHotKey(_source.Handle, id, mods, vk))
-                return false;
+                return 0;
 
             _callbacks[id] = callback;
-            return true;
+            return id;
+        }
+
+        /// <summary>Removes one hotkey registered with <see cref="Register"/>.</summary>
+        public void Unregister(int id)
+        {
+            if (id == 0 || !_callbacks.Remove(id)) return;
+            try { UnregisterHotKey(_source.Handle, id); } catch { }
         }
 
         public void UnregisterAll()

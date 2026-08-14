@@ -9,6 +9,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using System.Windows.Shapes;   // Polyline, Line, Ellipse — note this makes the bare
                                // name `Path` ambiguous with System.IO.Path, so file
                                // paths are fully qualified below.
@@ -37,11 +38,24 @@ namespace AdvancedSnip
     /// </summary>
     public partial class EditorWindow : Window
     {
+        /// <summary>
+        /// Undo depth, capped two ways.
+        ///
+        /// A step is a whole frozen copy of the picture, because that is the only
+        /// representation that survives crop, rotate, background removal and freehand
+        /// drawing uniformly. That is fine for a phone screenshot and ruinous for a scroll
+        /// capture: 24 steps of a 3840 x 2160 image is 760 MB, and 24 steps of a tall page
+        /// capture is several gigabytes. So the count is a ceiling, not a target, and a
+        /// byte budget decides the real depth. On a 1080p capture that still allows the
+        /// full 24 steps; on a very large one it settles at three or four, which is what
+        /// the user would have chosen if asked.
+        /// </summary>
         private const int MaxUndo = 24;
+        private const long UndoBudgetBytes = 256L * 1024 * 1024;
 
         private BitmapSource _image = null!;
-        private readonly Stack<BitmapSource> _undo = new();
-        private readonly Stack<BitmapSource> _redo = new();
+        private readonly List<BitmapSource> _undo = new();
+        private readonly List<BitmapSource> _redo = new();
 
         private EditTool _tool = EditTool.Crop;
         private double _zoom = 1.0;
@@ -84,6 +98,9 @@ namespace AdvancedSnip
                 : "Edit — " + System.IO.Path.GetFileName(path);
 
             BuildSwatches();
+
+            // Selecting Crop fires Tool_Checked, which sets the drawing-options row for
+            // us; the row's XAML default is Collapsed, so it is never briefly wrong.
             ToolCrop.IsChecked = true;
 
             ThemeManager.ApplyToWindow(this);
@@ -102,16 +119,10 @@ namespace AdvancedSnip
             if (next == null) return;
             if (!next.IsFrozen && next.CanFreeze) next.Freeze();
 
-            _undo.Push(_image);
-            while (_undo.Count > MaxUndo)
-            {
-                // Stack has no bounded mode; rebuild without the oldest frame.
-                var keep = _undo.ToArray();          // newest first
-                _undo.Clear();
-                for (int i = Math.Min(keep.Length, MaxUndo) - 1; i >= 0; i--)
-                    _undo.Push(keep[i]);
-                break;
-            }
+            // A List used as a stack: the end is the top, and dropping the oldest frame
+            // is a single RemoveAt(0) rather than rebuilding the whole thing.
+            _undo.Add(_image);
+            TrimUndo();
 
             _redo.Clear();
             _image = next;
@@ -123,6 +134,38 @@ namespace AdvancedSnip
             Refresh();
             if (TextMode) EnterTextMode();
         }
+
+        private static BitmapSource Pop(List<BitmapSource> stack)
+        {
+            var top = stack[^1];
+            stack.RemoveAt(stack.Count - 1);
+            return top;
+        }
+
+        /// <summary>Approximate resident cost of one history frame.</summary>
+        private static long FrameBytes(BitmapSource b) => MemoryGuard.BytesOf(b);
+
+        private static void TrimHistory(List<BitmapSource> stack, long budget)
+        {
+            while (stack.Count > MaxUndo) stack.RemoveAt(0);
+
+            long total = 0;
+            for (int i = 0; i < stack.Count; i++) total += FrameBytes(stack[i]);
+
+            // Always keep at least one step: an editor where Ctrl+Z does nothing because
+            // the picture was large is worse than one that uses the memory.
+            while (stack.Count > 1 && total > budget)
+            {
+                total -= FrameBytes(stack[0]);
+                stack.RemoveAt(0);
+            }
+        }
+
+        private void TrimUndo() => TrimHistory(_undo, UndoBudgetBytes);
+
+        // Redo gets a smaller share; it only fills up when the user is stepping backwards,
+        // and at that point the undo side is what they are actually relying on.
+        private void TrimRedo() => TrimHistory(_redo, UndoBudgetBytes / 2);
 
         private void Refresh()
         {
@@ -285,7 +328,26 @@ namespace AdvancedSnip
                 ClearWordBoxes();
                 Overlay.Cursor = _tool == EditTool.Crop ? Cursors.Cross : Cursors.Pen;
             }
+
+            ShowDrawOptions();
             Refresh();
+        }
+
+        /// <summary>
+        /// Shows the colour and size row only for the tools that draw with them.
+        ///
+        /// Crop moves a rectangle and Select text highlights words the engine found —
+        /// neither has a stroke to colour or a width to set, so for those two the controls
+        /// were not merely unused, they were misleading about what the next drag would do.
+        /// </summary>
+        private void ShowDrawOptions()
+        {
+            if (DrawOptions == null) return;   // fires during InitializeComponent
+
+            bool draws = _tool is EditTool.Pen or EditTool.Highlight or EditTool.Rect
+                              or EditTool.Ellipse or EditTool.Arrow or EditTool.Redact;
+
+            DrawOptions.Visibility = draws ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void Thickness_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -649,8 +711,9 @@ namespace AdvancedSnip
         {
             if (_undo.Count == 0) return;
             ClearPreview();
-            _redo.Push(_image);
-            _image = _undo.Pop();
+            _redo.Add(_image);
+            _image = Pop(_undo);
+            TrimRedo();
             InvalidateLayout();
             Refresh();
             if (TextMode) EnterTextMode();
@@ -660,8 +723,9 @@ namespace AdvancedSnip
         {
             if (_redo.Count == 0) return;
             ClearPreview();
-            _undo.Push(_image);
-            _image = _redo.Pop();
+            _undo.Add(_image);
+            _image = Pop(_redo);
+            TrimUndo();
             InvalidateLayout();
             Refresh();
             if (TextMode) EnterTextMode();
@@ -751,9 +815,29 @@ namespace AdvancedSnip
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Couldn't open that image:\n" + ex.Message,
+                ThemedDialog.Show(this, "Couldn't open that image:\n" + ex.Message,
                     "Advanced Snip", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
+        }
+
+        /// <summary>
+        /// Loads a different picture into the window that is already open, asking first if
+        /// there are unsaved edits to lose.
+        ///
+        /// This is what a second capture needs while the editor is up. Returns false when
+        /// the user declines, so the caller knows the window is still showing the old
+        /// picture and does not go on to claim otherwise.
+        /// </summary>
+        public bool TryAdopt(BitmapSource image, string? path)
+        {
+            // Already showing this exact file: nothing to load, and nothing to confirm.
+            if (path != null && string.Equals(path, FilePath, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (!ConfirmDiscard()) return false;
+
+            Adopt(image, path);
+            return true;
         }
 
         /// <summary>Replaces everything the window is holding with a different picture.</summary>
@@ -761,6 +845,7 @@ namespace AdvancedSnip
         {
             _undo.Clear();
             _redo.Clear();
+            MemoryGuard.RequestTrim();
             InvalidateLayout();
             CloseBgPanel();
             ClearPreview();
@@ -794,7 +879,7 @@ namespace AdvancedSnip
         {
             if (!_dirty || _undo.Count == 0) return true;
 
-            var answer = MessageBox.Show(this,
+            var answer = ThemedDialog.Show(this,
                 "This image has unsaved edits. Open the new one anyway?",
                 "Advanced Snip", MessageBoxButton.YesNo, MessageBoxImage.Warning);
             return answer == MessageBoxResult.Yes;
@@ -843,14 +928,33 @@ namespace AdvancedSnip
             HintText.Text = "Finding text…";
 
             var subject = _image;
+
+            // A tall capture is read band by band, so there is real progress to report and
+            // it is worth reporting: a silent ten-second pause reads as a hang, which is
+            // exactly what this used to be.
+            var progress = new Progress<double>(p =>
+            {
+                if (!token.IsCancellationRequested && p < 0.999)
+                    HintText.Text = $"Finding text… {p * 100:0}%";
+            });
+
             try
             {
-                var layout = await OcrService.ReadLayoutAsync(subject, token);
+                var layout = await OcrService.ReadLayoutAsync(subject, token, progress);
                 if (token.IsCancellationRequested) return;
 
                 _layout = layout;
                 _layoutFor = subject;
                 _selFrom = _selTo = -1;
+                UpdateTextCopyState();
+
+                // Hand it to the gallery's index. Only "Copy all text" used to do this, so
+                // reading a picture with the Select text tool — the thing that proves the
+                // words are legible — taught the index nothing, and the same file stayed
+                // unsearchable. Guarded on the picture being unedited: text read from a
+                // cropped or annotated version does not describe what is on disk.
+                if (!_dirty && !string.IsNullOrEmpty(FilePath) && layout.Any)
+                    (System.Windows.Application.Current as App)?.RememberOcr(FilePath!, layout.Text);
 
                 if (!layout.Any)
                 {
@@ -865,10 +969,53 @@ namespace AdvancedSnip
             catch (Exception ex) { HintText.Text = "Couldn't read this image: " + ex.Message; }
         }
 
+        /// <summary>
+        /// Rebuilds the highlights for the new viewport after a scroll.
+        ///
+        /// Debounced, because ScrollChanged fires continuously while a wheel spins and
+        /// rebuilding on every one of those would be the very cost this is avoiding.
+        /// </summary>
+        private void Scroller_ScrollChanged(object sender, ScrollChangedEventArgs e)
+        {
+            if (!TextMode || _layout == null) return;
+            if (Math.Abs(e.VerticalChange) < 1 && Math.Abs(e.HorizontalChange) < 1) return;
+
+            _wordRelayout ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+            _wordRelayout.Tick -= WordRelayout_Tick;
+            _wordRelayout.Tick += WordRelayout_Tick;
+            _wordRelayout.Stop();
+            _wordRelayout.Start();
+        }
+
+        private DispatcherTimer? _wordRelayout;
+
+        private void WordRelayout_Tick(object? sender, EventArgs e)
+        {
+            _wordRelayout?.Stop();
+            if (TextMode && _layout != null) LayoutWordBoxes();
+        }
+
+        /// <summary>
+        /// Enables "Copy all" only when the page actually holds recognised words.
+        ///
+        /// It used to be live at all times and simply return when there was nothing to
+        /// copy — so on a picture with no readable text, or before recognition had
+        /// finished, pressing it did nothing and gave no reason.
+        ///
+        /// Note this is gated on the *layout*, not on the selection: the button copies the
+        /// whole page. Dragging out a selection copies it on release and needs no button.
+        /// </summary>
+        private void UpdateTextCopyState()
+        {
+            if (TextCopyBtn == null) return;
+            TextCopyBtn.IsEnabled = _layout is { Any: true };
+        }
+
         private void ClearWordBoxes()
         {
             TextLayer.Children.Clear();
             _wordBoxes.Clear();
+            _boxWordIndex.Clear();
         }
 
         /// <summary>
@@ -876,23 +1023,40 @@ namespace AdvancedSnip
         /// so the outlines stay a constant thickness on screen instead of scaling into
         /// thick slabs when you zoom in.
         /// </summary>
+        // Frozen once and shared by every highlight. These used to be built fresh inside
+        // PaintSelection, which runs on every mouse-move during a drag — two allocations
+        // plus a few thousand property writes, sixty times a second.
+        private static readonly Brush WordPlain =
+            Freeze(new SolidColorBrush(Color.FromArgb(0x22, 0x3B, 0x82, 0xF6)));
+        private static readonly Brush WordSelected =
+            Freeze(new SolidColorBrush(Color.FromArgb(0x88, 0x3B, 0x82, 0xF6)));
+
+        private static Brush Freeze(Brush brush) { brush.Freeze(); return brush; }
+
+        /// <summary>Which word each visual in <see cref="_wordBoxes"/> belongs to.</summary>
+        private readonly List<int> _boxWordIndex = new();
+
         private void LayoutWordBoxes()
         {
             ClearWordBoxes();
             if (_layout == null || !TextMode) return;
 
-            // A dense page of text is still only a few thousand words; beyond that the
-            // highlights stop being useful anyway and the shape count starts to cost.
-            int limit = Math.Min(_layout.Words.Count, 4000);
+            // Only the words actually on screen get a visual. A scroll capture can hold
+            // tens of thousands, and building a shape for every one of them costs a long
+            // pause and a great deal of memory to draw something almost entirely outside
+            // the viewport. Rebuilt on scroll and zoom, which is where the old fixed cap of
+            // 4000 was silently dropping highlights on tall images anyway.
+            var visible = VisibleImageRect();
+            _layout.WordsIn(visible, _visibleWords);
 
-            for (int i = 0; i < limit; i++)
+            foreach (int i in _visibleWords)
             {
                 var box = _layout.Words[i].Box;
                 var r = new System.Windows.Shapes.Rectangle
                 {
                     Width  = Math.Max(1, box.Width  * _zoom),
                     Height = Math.Max(1, box.Height * _zoom),
-                    Fill = new SolidColorBrush(Color.FromArgb(0x22, 0x3B, 0x82, 0xF6)),
+                    Fill = WordPlain,
                     RadiusX = 2, RadiusY = 2,
                     IsHitTestVisible = false
                 };
@@ -900,46 +1064,61 @@ namespace AdvancedSnip
                 Canvas.SetTop(r, box.Y * _zoom);
                 TextLayer.Children.Add(r);
                 _wordBoxes.Add(r);
+                _boxWordIndex.Add(i);
             }
 
             PaintSelection();
         }
 
+        private readonly List<int> _visibleWords = new();
+
+        /// <summary>
+        /// The part of the image on screen, in image pixels, padded by a screenful so a
+        /// small scroll does not immediately need a rebuild.
+        /// </summary>
+        private System.Windows.Rect VisibleImageRect()
+        {
+            double zoom = _zoom <= 0 ? 1 : _zoom;
+
+            double w = Stage?.ActualWidth ?? 0;
+            double h = Stage?.ActualHeight ?? 0;
+            if (Scroller != null && Scroller.ViewportWidth > 0)
+            {
+                double top = Math.Max(0, Scroller.VerticalOffset - Scroller.ViewportHeight);
+                double left = Math.Max(0, Scroller.HorizontalOffset - Scroller.ViewportWidth);
+                return new System.Windows.Rect(
+                    left / zoom, top / zoom,
+                    Scroller.ViewportWidth * 3 / zoom,
+                    Scroller.ViewportHeight * 3 / zoom);
+            }
+
+            return new System.Windows.Rect(0, 0,
+                Math.Max(1, w / zoom), Math.Max(1, h / zoom));
+        }
+
         private void PaintSelection()
         {
-            var plain    = new SolidColorBrush(Color.FromArgb(0x22, 0x3B, 0x82, 0xF6));
-            var selected = new SolidColorBrush(Color.FromArgb(0x88, 0x3B, 0x82, 0xF6));
-
             int lo = Math.Min(_selFrom, _selTo), hi = Math.Max(_selFrom, _selTo);
+
             for (int i = 0; i < _wordBoxes.Count; i++)
-                _wordBoxes[i].Fill = (_selFrom >= 0 && i >= lo && i <= hi) ? selected : plain;
+            {
+                int word = _boxWordIndex[i];
+                var want = (_selFrom >= 0 && word >= lo && word <= hi) ? WordSelected : WordPlain;
+                // Reference comparison, so an unchanged box is not touched at all.
+                if (!ReferenceEquals(_wordBoxes[i].Fill, want)) _wordBoxes[i].Fill = want;
+            }
         }
 
         /// <summary>
-        /// Nearest word to a point. Falling back to nearest rather than requiring a direct
-        /// hit means the gaps between words don't swallow the drag.
+        /// Nearest word to a point.
+        ///
+        /// The search itself lives on <see cref="OcrLayout"/>, which keeps a band index for
+        /// it. This used to be a linear scan of every word on the page, which is fine for a
+        /// screenshot and grinds on a scroll capture with tens of thousands of them —
+        /// once per mouse-move.
         /// </summary>
         private int WordAt(System.Windows.Point imagePoint)
-        {
-            if (_layout == null || _layout.Words.Count == 0) return -1;
-
-            int best = -1;
-            double bestDistance = double.MaxValue;
-
-            for (int i = 0; i < _layout.Words.Count; i++)
-            {
-                var b = _layout.Words[i].Box;
-                if (b.Contains(imagePoint)) return i;
-
-                double dx = Math.Max(0, Math.Max(b.X - imagePoint.X, imagePoint.X - b.Right));
-                double dy = Math.Max(0, Math.Max(b.Y - imagePoint.Y, imagePoint.Y - b.Bottom));
-                // Vertical distance counts for more, so a point in the margin picks the
-                // word on its own line rather than one above or below.
-                double d = dx * dx + dy * dy * 4;
-                if (d < bestDistance) { bestDistance = d; best = i; }
-            }
-            return best;
-        }
+            => _layout?.NearestWord(imagePoint) ?? -1;
 
         private void BeginTextSelection(System.Windows.Point overlayPoint)
         {
@@ -1005,6 +1184,11 @@ namespace AdvancedSnip
             _layoutFor = null;
             _selFrom = _selTo = -1;
             ClearWordBoxes();
+
+            // Adopting a different picture, cropping, or any edit that changes the pixels
+            // throws the recognised words away — so the button that copies them has to go
+            // back to disabled until the new picture has been read.
+            UpdateTextCopyState();
         }
 
         // ─────────────────────────────── background removal ───────────────────
@@ -1113,7 +1297,7 @@ namespace AdvancedSnip
         {
             if (!OcrService.IsAvailable)
             {
-                MessageBox.Show(this, OcrService.UnavailableReason, "Advanced Snip",
+                ThemedDialog.Show(this, OcrService.UnavailableReason, "Advanced Snip",
                     MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
@@ -1140,7 +1324,13 @@ namespace AdvancedSnip
 
             try
             {
-                string text = await OcrService.ReadImageAsync(subject, token);
+                var readProgress = new Progress<double>(p =>
+                {
+                    if (!token.IsCancellationRequested && p < 0.999)
+                        OcrTextBox.Text = $"Reading… {p * 100:0}%";
+                });
+
+                string text = await OcrService.ReadImageAsync(subject, token, readProgress);
                 if (token.IsCancellationRequested) return;
 
                 text = text.Trim();
@@ -1196,19 +1386,71 @@ namespace AdvancedSnip
 
         private void Copy_Click(object sender, RoutedEventArgs e)
         {
-            ClipboardService.SetImage(_image);
-            HintText.Text = "Copied to clipboard";
+            // Through App so it also lands in the history HUD; see App.CopyImage. An
+            // unsaved edit has no FilePath, which is exactly the case Promote fingerprints.
+            var outcome = (System.Windows.Application.Current as App)?.CopyImage(_image, FilePath);
+            HintText.Text = outcome?.Warning ?? "Copied to clipboard";
         }
 
         private void Save_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrEmpty(FilePath)) { SaveAs_Click(sender, e); return; }
+            if (string.IsNullOrEmpty(FilePath) ||
+                string.Equals(System.IO.Path.GetExtension(FilePath), ".pdf", StringComparison.OrdinalIgnoreCase))
+            {
+                SaveAs_Click(sender, e);
+                return;
+            }
             if (WriteTo(FilePath)) Finish(FilePath);
+        }
+
+        /// <summary>
+        /// Hands the current picture to the PDF dialog.
+        ///
+        /// Deliberately separate from Export…, which is the "save this as another image
+        /// format" path. A PDF of a twenty-thousand-pixel scroll capture is a different
+        /// question — it needs a paper size and a page split — and burying that behind a
+        /// file-type dropdown would give the user nowhere to answer it.
+        /// </summary>
+        private void Pdf_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var dlg = new PdfExportWindow(_image, FilePath, _settings) { Owner = this };
+                if (dlg.ShowDialog() != true || dlg.SavedPath == null) return;
+
+                HintText.Text = "Saved " + System.IO.Path.GetFileName(dlg.SavedPath);
+
+                var answer = ThemedDialog.Show(this,
+                    "PDF saved.\n\nOpen it now?", "Advanced Snip",
+                    MessageBoxButton.YesNo, MessageBoxImage.Information);
+
+                if (answer == MessageBoxResult.Yes)
+                    System.Diagnostics.Process.Start(
+                        new System.Diagnostics.ProcessStartInfo(dlg.SavedPath)
+                        { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                ThemedDialog.Show(this, "Couldn't export the PDF:\n" + ex.Message,
+                    "Advanced Snip", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         private void SaveAs_Click(object sender, RoutedEventArgs e)
         {
             bool jpeg = string.Equals(_settings.ImageFormat, "JPEG", StringComparison.OrdinalIgnoreCase);
+            string defaultName;
+            if (!string.IsNullOrEmpty(FilePath))
+            {
+                string nameWithoutExt = System.IO.Path.GetFileNameWithoutExtension(FilePath);
+                bool isPdf = string.Equals(System.IO.Path.GetExtension(FilePath), ".pdf", StringComparison.OrdinalIgnoreCase);
+                defaultName = nameWithoutExt + (isPdf ? "_page" : "_edited");
+            }
+            else
+            {
+                defaultName = $"{_settings.FilenamePrefix}_{DateTime.Now:yyyyMMdd_HHmmss}";
+            }
+
             var dlg = new Microsoft.Win32.SaveFileDialog
             {
                 Filter = "PNG image (transparency)|*.png"
@@ -1219,9 +1461,7 @@ namespace AdvancedSnip
                 FilterIndex = jpeg ? 2 : 1,
                 AddExtension = true,
                 DefaultExt = jpeg ? "jpg" : "png",
-                FileName = FilePath != null
-                    ? System.IO.Path.GetFileNameWithoutExtension(FilePath) + "_edited"
-                    : $"{_settings.FilenamePrefix}_{DateTime.Now:yyyyMMdd_HHmmss}",
+                FileName = defaultName,
                 InitialDirectory = Directory.Exists(_settings.SaveFolder)
                     ? _settings.SaveFolder : null
             };
@@ -1234,6 +1474,12 @@ namespace AdvancedSnip
         {
             try
             {
+                if (string.Equals(System.IO.Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase))
+                {
+                    ThemedDialog.Show(this, "Cannot overwrite a PDF document with an image file. Please save as PNG or JPEG.",
+                        "Advanced Snip", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
                 // Always through a temp file, moved into place at the end. Encoding
                 // straight over the destination means a failure part-way through leaves
                 // the original capture truncated — and this method routinely overwrites
@@ -1274,7 +1520,7 @@ namespace AdvancedSnip
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Couldn't save the image:\n" + ex.Message,
+                ThemedDialog.Show(this, "Couldn't save the image:\n" + ex.Message,
                     "Advanced Snip", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
@@ -1318,6 +1564,7 @@ namespace AdvancedSnip
                     case Key.Z: Undo_Click(this, new RoutedEventArgs()); e.Handled = true; return;
                     case Key.Y: Redo_Click(this, new RoutedEventArgs()); e.Handled = true; return;
                     case Key.S: Save_Click(this, new RoutedEventArgs()); e.Handled = true; return;
+                    case Key.P: Pdf_Click(this, new RoutedEventArgs()); e.Handled = true; return;
                     case Key.C:
                         if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
                             CopyText_Click(this, new RoutedEventArgs());
@@ -1373,6 +1620,36 @@ namespace AdvancedSnip
                 case Key.B: ToolRedact.IsChecked = true; break;
                 case Key.T: ToolText.IsChecked = true; break;
             }
+        }
+
+        /// <summary>
+        /// Lets go of the undo history and the displayed image on close.
+        ///
+        /// Closing a WPF window does not release what its elements are showing — that
+        /// waits for the window object itself to be collected, and an editor that has been
+        /// used for a few crops on a large capture can be holding several hundred
+        /// megabytes by then. Everything here is cheap to rebuild if the user reopens.
+        /// </summary>
+        protected override void OnClosed(EventArgs e)
+        {
+            base.OnClosed(e);
+
+            _undo.Clear();
+            _redo.Clear();
+            InvalidateLayout();
+
+            Canvas1.Source = null;
+            SavedImage = null;
+
+            // The background-removal panel keeps a pristine copy of the image so every
+            // slider change re-runs from the original. That is a second full-size buffer
+            // and there is no reason for it to outlive the window.
+            _bgOriginal = null;
+            try { _bgCts?.Cancel(); _bgCts?.Dispose(); } catch { }
+            _bgCts = null;
+            _bgSeeds.Clear();
+
+            MemoryGuard.RequestTrim();
         }
     }
 

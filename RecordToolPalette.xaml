@@ -1,0 +1,338 @@
+<Window x:Class="AdvancedSnip.RecordToolPalette"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Tools"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Topmost="True"
+        ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight"
+        WindowStartupLocation="Manual"
+        FontFamily="Segoe UI"
+        KeyDown="Palette_KeyDown"
+        Deactivated="Palette_Deactivated">
+
+    <Window.Resources>
+
+        <!-- One square button per tool. The glyph is large and the label small, because
+             at a glance the shape is what identifies the tool, not the word. -->
+        <Style x:Key="ToolTile" TargetType="RadioButton">
+            <Setter Property="Width" Value="62"/>
+            <Setter Property="Height" Value="56"/>
+            <Setter Property="Margin" Value="3"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="#FFE8EAED"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Chrome" CornerRadius="8" Background="#1AFFFFFF"
+                                BorderBrush="Transparent" BorderThickness="1.5">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#33FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#FF3B82F6"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#FFBFDBFE"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TileGlyph" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="19"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="TileLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="Opacity" Value="0.85"/>
+            <Setter Property="Margin" Value="0,3,0,0"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- The number that picks this tile from the keyboard. Faint and in the corner:
+             it is there to be learned once, not read every time. -->
+        <Style x:Key="TileKey" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="8.5"/>
+            <Setter Property="Opacity" Value="0.5"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+            <Setter Property="Margin" Value="0,3,5,0"/>
+        </Style>
+
+        <Style x:Key="MiniBtn" TargetType="Button">
+            <Setter Property="Foreground" Value="#FFE8EAED"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="9,4"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" CornerRadius="6" Background="#1AFFFFFF"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#33FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Chrome" Property="Opacity" Value="0.35"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="MiniToggle" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="#FFE8EAED"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="9,4"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Chrome" CornerRadius="6" Background="#1AFFFFFF"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#33FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#FF3B82F6"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <!-- Floating-panel chrome. Shared with the recording toolbar, the tool picker, the
+         clipboard HUD, its preview and the scroll-capture progress panel: these all
+         float over whatever is on screen, so they are fixed dark rather than themed —
+         a light panel over a light desktop has no edge. Kept identical across the five
+         because two of them share the screen during a recording. -->
+    <Border CornerRadius="12" Background="#F21D2027"
+            BorderBrush="#33FFFFFF" BorderThickness="1"
+            Padding="10,7,10,9">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="26" ShadowDepth="4" Opacity="0.6" Color="Black"/>
+        </Border.Effect>
+
+        <StackPanel>
+
+            <!-- Title strip: drag handle, pin, close. The pin is the answer to having to
+                 summon this panel once per tool change — pinned, it stays where it was put
+                 and every tool is one click away for the rest of the recording. -->
+            <DockPanel x:Name="HeaderBar" LastChildFill="True"
+                       Background="#01000000" Margin="0,0,0,7"
+                       MouseLeftButtonDown="Header_Drag">
+                <Button x:Name="CloseBtn" DockPanel.Dock="Right" Style="{StaticResource MiniBtn}"
+                        Content="&#x2715;" Padding="7,2" FontSize="11"
+                        Click="Close_Click" ToolTip="Close (Esc)"/>
+                <ToggleButton x:Name="PinBtn" DockPanel.Dock="Right" Style="{StaticResource MiniToggle}"
+                              Content="&#x1F4CC;" Padding="7,2" FontSize="11"
+                              Click="Pin_Click"
+                              ToolTip="Keep this panel open and where you put it (P)"/>
+                <TextBlock x:Name="HeaderText" Text="Tools" Foreground="#99FFFFFF"
+                           FontSize="11" VerticalAlignment="Center" Margin="4,0,0,0"/>
+            </DockPanel>
+
+            <!-- tools -->
+            <UniformGrid x:Name="ToolGrid" Columns="5" Rows="2">
+                <RadioButton x:Name="TilePen" Style="{StaticResource ToolTile}"
+                             GroupName="Tool" Checked="Tool_Checked" Tag="Pen"
+                             ToolTip="Freehand pen — 1, or Ctrl+Shift+P. Hold Shift, Ctrl or Ctrl+Shift while drawing for a line, arrow or box.">
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TileGlyph}" Text="&#x270E;"/>
+                            <TextBlock Style="{StaticResource TileLabel}" Text="Pen" Tag="label"/>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource TileKey}" Text="1" Tag="key"/>
+                    </Grid>
+                </RadioButton>
+
+                <RadioButton x:Name="TileMarker" Style="{StaticResource ToolTile}"
+                             GroupName="Tool" Checked="Tool_Checked" Tag="Marker"
+                             ToolTip="Highlighter — wide, see-through strokes. 2, or Ctrl+Shift+M">
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TileGlyph}" Text="&#x1F58D;"/>
+                            <TextBlock Style="{StaticResource TileLabel}" Text="Marker" Tag="label"/>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource TileKey}" Text="2" Tag="key"/>
+                    </Grid>
+                </RadioButton>
+
+                <RadioButton x:Name="TileArrow" Style="{StaticResource ToolTile}"
+                             GroupName="Tool" Checked="Tool_Checked" Tag="Arrow"
+                             ToolTip="Arrow — drag from the tail to the point. 3, or Ctrl+Shift+X. Shift while dragging snaps to 45°.">
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TileGlyph}" Text="&#x2192;"/>
+                            <TextBlock Style="{StaticResource TileLabel}" Text="Arrow" Tag="label"/>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource TileKey}" Text="3" Tag="key"/>
+                    </Grid>
+                </RadioButton>
+
+                <RadioButton x:Name="TileLine" Style="{StaticResource ToolTile}"
+                             GroupName="Tool" Checked="Tool_Checked" Tag="Line"
+                             ToolTip="Straight line — 4. Shift while dragging snaps to 45°.">
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TileGlyph}" Text="&#x2571;"/>
+                            <TextBlock Style="{StaticResource TileLabel}" Text="Line" Tag="label"/>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource TileKey}" Text="4" Tag="key"/>
+                    </Grid>
+                </RadioButton>
+
+                <RadioButton x:Name="TileRect" Style="{StaticResource ToolTile}"
+                             GroupName="Tool" Checked="Tool_Checked" Tag="Rectangle"
+                             ToolTip="Box — 5. Shift while dragging makes it square.">
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TileGlyph}" Text="&#x25AD;"/>
+                            <TextBlock Style="{StaticResource TileLabel}" Text="Box" Tag="label"/>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource TileKey}" Text="5" Tag="key"/>
+                    </Grid>
+                </RadioButton>
+
+                <RadioButton x:Name="TileEllipse" Style="{StaticResource ToolTile}"
+                             GroupName="Tool" Checked="Tool_Checked" Tag="Ellipse"
+                             ToolTip="Circle or oval — 6. Shift while dragging makes it a circle.">
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TileGlyph}" Text="&#x25EF;"/>
+                            <TextBlock Style="{StaticResource TileLabel}" Text="Circle" Tag="label"/>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource TileKey}" Text="6" Tag="key"/>
+                    </Grid>
+                </RadioButton>
+
+                <RadioButton x:Name="TileSpotlight" Style="{StaticResource ToolTile}"
+                             GroupName="Tool" Checked="Tool_Checked" Tag="Spotlight"
+                             ToolTip="Spotlight — dims everything outside the box. 7, or Ctrl+Shift+F">
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TileGlyph}" Text="&#x25C9;"/>
+                            <TextBlock Style="{StaticResource TileLabel}" Text="Spotlight" Tag="label"/>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource TileKey}" Text="7" Tag="key"/>
+                    </Grid>
+                </RadioButton>
+
+                <RadioButton x:Name="TileStep" Style="{StaticResource ToolTile}"
+                             GroupName="Tool" Checked="Tool_Checked" Tag="Step"
+                             ToolTip="Numbered badge — click to drop 1, 2, 3… 8, or Ctrl+Shift+N">
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TileGlyph}" Text="&#x2460;"/>
+                            <TextBlock Style="{StaticResource TileLabel}" Text="Step" Tag="label"/>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource TileKey}" Text="8" Tag="key"/>
+                    </Grid>
+                </RadioButton>
+
+                <RadioButton x:Name="TileRedact" Style="{StaticResource ToolTile}"
+                             GroupName="Tool" Checked="Tool_Checked" Tag="Redact"
+                             ToolTip="Cover something up with a solid block. 9, or Ctrl+Shift+B">
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TileGlyph}" Text="&#x25A0;"/>
+                            <TextBlock Style="{StaticResource TileLabel}" Text="Hide" Tag="label"/>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource TileKey}" Text="9" Tag="key"/>
+                    </Grid>
+                </RadioButton>
+
+                <RadioButton x:Name="TileOff" Style="{StaticResource ToolTile}"
+                             GroupName="Tool" Checked="Tool_Checked" Tag="Off"
+                             ToolTip="Put the tools away and use the screen normally — 0 or Esc">
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TileGlyph}" Text="&#x2196;"/>
+                            <TextBlock Style="{StaticResource TileLabel}" Text="Off" Tag="label"/>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource TileKey}" Text="0" Tag="key"/>
+                    </Grid>
+                </RadioButton>
+            </UniformGrid>
+
+            <Rectangle Height="1" Fill="#26FFFFFF" Margin="2,9,2,8"/>
+
+            <!-- colour + thickness -->
+            <DockPanel LastChildFill="False">
+                <ItemsControl x:Name="Swatches" DockPanel.Dock="Left" VerticalAlignment="Center">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <ToggleButton x:Name="FillToggle" Style="{StaticResource MiniToggle}"
+                                  Content="Fill" Click="Fill_Click"
+                                  ToolTip="Shade the inside of boxes and circles"/>
+                    <Button x:Name="ThicknessBtn" Style="{StaticResource MiniBtn}"
+                            Content="4 px" Click="Thickness_Click"
+                            ToolTip="Stroke width — click to cycle, or roll the wheel over the screen"/>
+                </StackPanel>
+            </DockPanel>
+
+            <Rectangle Height="1" Fill="#26FFFFFF" Margin="2,8,2,8"/>
+
+            <!-- zoom + edit -->
+            <DockPanel LastChildFill="False">
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <TextBlock x:Name="ZoomCaption" Text="Zoom" Foreground="#99FFFFFF" FontSize="11"
+                               VerticalAlignment="Center" Margin="2,0,6,0"/>
+                    <Button Style="{StaticResource MiniBtn}" Content="&#x2212;"
+                            Click="ZoomOut_Click" ToolTip="Zoom out (Ctrl+Shift+−)"/>
+                    <Border Background="#333B82F6" CornerRadius="5" Padding="8,3"
+                            Margin="2,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="ZoomLabel" Text="1x" Foreground="#FF93C5FD"
+                                   FontSize="11.5" FontWeight="SemiBold" MinWidth="22"
+                                   TextAlignment="Center"/>
+                    </Border>
+                    <Button Style="{StaticResource MiniBtn}" Content="+"
+                            Click="ZoomIn_Click" ToolTip="Zoom in (Ctrl+Shift++)"/>
+                </StackPanel>
+
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Button x:Name="UndoBtn" Style="{StaticResource MiniBtn}" Content="Undo"
+                            Click="Undo_Click" ToolTip="Remove the last thing drawn (Ctrl+Shift+Z)"/>
+                    <Button x:Name="ClearBtn" Style="{StaticResource MiniBtn}" Content="Clear"
+                            Click="Clear_Click"
+                            ToolTip="Erase everything (Ctrl+Shift+E). Undo brings it back."/>
+                </StackPanel>
+            </DockPanel>
+
+            <TextBlock x:Name="HintText" Foreground="#8CFFFFFF" FontSize="10.5"
+                       Margin="2,9,2,0" TextWrapping="Wrap" MaxWidth="330"
+                       Text="1–9 picks a tool · Esc puts them away · pin to keep this open · not recorded"/>
+        </StackPanel>
+    </Border>
+</Window>

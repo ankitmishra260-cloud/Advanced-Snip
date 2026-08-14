@@ -186,9 +186,30 @@ namespace AdvancedSnip.Services
         internal const ushort VK_NEXT = 0x22;    // Page Down
         internal const ushort VK_CONTROL = 0x11;
         internal const ushort VK_V = 0x56;
+        internal const ushort VK_SHIFT = 0x10;
+        // Alt is defined but deliberately not used as a drawing modifier: pressing it
+        // opens the menu bar of whatever application is being recorded, which would be
+        // visible in the take. See RecordAnnotationWindow.ResolveTool.
+        internal const ushort VK_MENU = 0x12;
 
         [DllImport("user32.dll", SetLastError = true)]
         internal static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+        [DllImport("user32.dll")]
+        internal static extern short GetAsyncKeyState(int vKey);
+
+        /// <summary>
+        /// True when the key is physically down right now.
+        ///
+        /// Used instead of WPF's <c>Keyboard.Modifiers</c> by the recording overlay, which
+        /// is WS_EX_NOACTIVATE and therefore never has keyboard focus — WPF's view of the
+        /// modifier state on a window that never receives key messages is not something to
+        /// rely on. This asks the OS directly and does not care who has focus.
+        /// </summary>
+        internal static bool IsKeyDown(int vKey) => (GetAsyncKeyState(vKey) & 0x8000) != 0;
+
+        internal static bool ShiftDown => IsKeyDown(VK_SHIFT);
+        internal static bool CtrlDown => IsKeyDown(VK_CONTROL);
 
         // ══════════════════════════════ windows ══════════════════════════════
 
@@ -318,6 +339,50 @@ namespace AdvancedSnip.Services
         internal static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
 
         internal const uint WDA_NONE = 0x00000000;
+
+        // ── cursor, for screen recording ──────────────────────────────────
+        // BitBlt copies the desktop surface, and the pointer is not part of it — it is
+        // composited by the display driver. Anything that wants a mouse in the picture
+        // has to fetch and draw it separately.
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct CURSORINFO
+        {
+            internal int cbSize;
+            internal int flags;
+            internal IntPtr hCursor;
+            internal POINT ptScreenPos;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct ICONINFO
+        {
+            [MarshalAs(UnmanagedType.Bool)] internal bool fIcon;
+            internal int xHotspot;
+            internal int yHotspot;
+            internal IntPtr hbmMask;
+            internal IntPtr hbmColor;
+        }
+
+        internal const int CURSOR_SHOWING = 0x00000001;
+        internal const int DI_NORMAL = 0x0003;
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool GetCursorInfo(ref CURSORINFO pci);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool GetIconInfo(IntPtr hIcon, out ICONINFO piconinfo);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool DrawIconEx(IntPtr hdc, int xLeft, int yTop, IntPtr hIcon,
+                                               int cxWidth, int cyWidth, int istepIfAniCur,
+                                               IntPtr hbrFlickerFreeDraw, int diFlags);
+
+        // WS_EX_TRANSPARENT (click-through, used by the recording overlay) is already
+        // declared with the other window styles further down this file.
         internal const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
 
         // ── DWM (used to skip cloaked/invisible UWP shells during hit-testing) ──
@@ -383,6 +448,28 @@ namespace AdvancedSnip.Services
             IntPtr hdcSrc, int xSrc, int ySrc, uint rop);
 
         internal const uint SRCCOPY = 0x00CC0020;
+
+        [DllImport("gdi32.dll", ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool StretchBlt(IntPtr hdcDest, int xDest, int yDest, int wDest, int hDest,
+                                               IntPtr hdcSrc, int xSrc, int ySrc, int wSrc, int hSrc,
+                                               uint rop);
+
+        [DllImport("gdi32.dll", ExactSpelling = true)]
+        internal static extern int SetStretchBltMode(IntPtr hdc, int mode);
+
+        [DllImport("gdi32.dll", ExactSpelling = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool SetBrushOrgEx(IntPtr hdc, int x, int y, IntPtr pt);
+
+        /// <summary>
+        /// COLORONCOLOR. For magnification this is the right choice: HALFTONE averages
+        /// source pixels, which is what you want when shrinking, but when enlarging it
+        /// only softens text that was already sharp.
+        /// </summary>
+        internal const int STRETCH_COLORONCOLOR = 3;
+
+        internal const int STRETCH_HALFTONE = 4;
         internal const uint CAPTUREBLT = 0x40000000;
 
         [DllImport("gdi32.dll")]

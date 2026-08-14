@@ -1,0 +1,424 @@
+<Window x:Class="AdvancedSnip.PdfExportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Export as PDF"
+        SizeToContent="Height"
+        Width="860"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        FontFamily="Segoe UI"
+        Background="{DynamicResource Brush.Window}"
+        Foreground="{DynamicResource Brush.Text}">
+
+    <Window.Resources>
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextBody}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,12,0"/>
+        </Style>
+
+        <Style x:Key="Primary" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource Brush.Accent}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.OnAccent}"/>
+            <Setter Property="Padding" Value="18,7"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" CornerRadius="6"
+                                Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background"
+                                        Value="{DynamicResource Brush.AccentHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Chrome" Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ZoomSlider" TargetType="Slider">
+            <Setter Property="IsMoveToPointEnabled" Value="True"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid Height="22" Background="Transparent">
+                            <Border Height="4" CornerRadius="2" VerticalAlignment="Center"
+                                    Background="{DynamicResource Brush.BorderStrong}"/>
+                            <Track x:Name="PART_Track">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="Slider.DecreaseLarge"
+                                                  Focusable="False" Opacity="0"/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="Slider.IncreaseLarge"
+                                                  Focusable="False" Opacity="0"/>
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Width="16" Height="16">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Ellipse Fill="{DynamicResource Brush.Accent}"
+                                                         Stroke="{DynamicResource Brush.OnAccent}"
+                                                         StrokeThickness="2"/>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Ghost" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextBody}"/>
+            <Setter Property="Padding" Value="16,7"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" CornerRadius="6"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{DynamicResource Brush.Border}"
+                                BorderThickness="1"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background"
+                                        Value="{DynamicResource Brush.Hover}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="22,20,22,18">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+
+    <StackPanel Grid.Column="0" Margin="0,0,20,0">
+
+        <TextBlock Text="Export as PDF"
+                   FontSize="17" FontWeight="SemiBold"
+                   Foreground="{DynamicResource Brush.TextHeading}"/>
+        <TextBlock x:Name="ImageInfo"
+                   FontSize="12" Margin="0,4,0,0"
+                   Foreground="{DynamicResource Brush.TextFaint}"/>
+
+        <!-- Page / Image Order (multi-image mode only) -->
+        <Border x:Name="ArrangeBorder"
+                Background="{DynamicResource Brush.Card}"
+                BorderBrush="{DynamicResource Brush.Border}"
+                BorderThickness="1" CornerRadius="8"
+                Padding="16,14" Margin="0,14,0,0"
+                Visibility="Collapsed">
+            <StackPanel>
+                <DockPanel Margin="0,0,0,8">
+                    <TextBlock Text="PAGE ORDER" Style="{StaticResource FieldLabel}" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="ArrangeCountLabel" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                               Foreground="{DynamicResource Brush.TextFaint}" FontSize="11" VerticalAlignment="Center"/>
+                </DockPanel>
+                <ListBox x:Name="ArrangeList"
+                         MaxHeight="120"
+                         Background="{DynamicResource Brush.Input}"
+                         BorderBrush="{DynamicResource Brush.BorderInput}"
+                         BorderThickness="1"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         SelectionChanged="ArrangeList_SelectionChanged">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel Margin="2,3">
+                                <TextBlock Text="{Binding IndexLabel}" FontWeight="Bold" Width="24"
+                                           Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center"/>
+                                <Border Width="32" Height="24" CornerRadius="3" ClipToBounds="True"
+                                        Background="{DynamicResource Brush.Subtle}" Margin="0,0,8,0">
+                                    <Image Source="{Binding Thumb}" Stretch="Uniform"
+                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                                </Border>
+                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Brush.TextHeading}"
+                                           TextTrimming="CharacterEllipsis" FontSize="11.5"/>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0" HorizontalAlignment="Right">
+                    <Button x:Name="MoveUpBtn" Content="▲ Move Up" Style="{StaticResource Ghost}"
+                            Padding="10,4" FontSize="11" Margin="0,0,6,0" Click="MoveUp_Click"/>
+                    <Button x:Name="MoveDownBtn" Content="▼ Move Down" Style="{StaticResource Ghost}"
+                            Padding="10,4" FontSize="11" Margin="0,0,6,0" Click="MoveDown_Click"/>
+                    <Button x:Name="RemovePageBtn" Content="✕ Remove" Style="{StaticResource Ghost}"
+                            Padding="10,4" FontSize="11" Click="RemovePage_Click"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Layout -->
+        <Border Background="{DynamicResource Brush.Card}"
+                BorderBrush="{DynamicResource Brush.Border}"
+                BorderThickness="1" CornerRadius="8"
+                Padding="16,14" Margin="0,14,0,0">
+            <StackPanel>
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Page layout" Style="{StaticResource FieldLabel}"/>
+                    <ComboBox x:Name="ModeCombo" Grid.Column="1"
+                              SelectionChanged="Combo_Changed">
+                        <ComboBoxItem Content="Split the image across pages" IsSelected="True"/>
+                        <ComboBoxItem Content="One page as tall as the image"/>
+                        <ComboBoxItem Content="Fit the whole image on one page"/>
+                    </ComboBox>
+                </Grid>
+
+                <!-- Position on the page. Shown only for the modes that can leave slack —
+                     a page cut to the size of the image has none, so offering to move it
+                     about would be offering nothing. -->
+                <Grid x:Name="AlignRow" Margin="0,0,0,10" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Position" Style="{StaticResource FieldLabel}"/>
+                    <ComboBox x:Name="HAlignCombo" Grid.Column="1" Margin="0,0,6,0"
+                              SelectionChanged="Combo_Changed"
+                              ToolTip="Across the page">
+                        <ComboBoxItem Content="Left"/>
+                        <ComboBoxItem Content="Centred" IsSelected="True"/>
+                        <ComboBoxItem Content="Right"/>
+                    </ComboBox>
+                    <ComboBox x:Name="VAlignCombo" Grid.Column="2"
+                              SelectionChanged="Combo_Changed"
+                              ToolTip="Down the page">
+                        <ComboBoxItem Content="Top"/>
+                        <ComboBoxItem Content="Middle" IsSelected="True"/>
+                        <ComboBoxItem Content="Bottom"/>
+                    </ComboBox>
+                </Grid>
+
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Paper size" Style="{StaticResource FieldLabel}"/>
+                    <ComboBox x:Name="PaperCombo" Grid.Column="1"
+                              SelectionChanged="Combo_Changed"/>
+                    <CheckBox x:Name="LandscapeChk" Grid.Column="2"
+                              Content="Landscape" Margin="12,0,0,0"
+                              VerticalAlignment="Center"
+                              Foreground="{DynamicResource Brush.TextBody}"
+                              Checked="Check_Changed" Unchecked="Check_Changed"/>
+                </Grid>
+
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Margin" Style="{StaticResource FieldLabel}"/>
+                    <ComboBox x:Name="MarginCombo" Grid.Column="1"
+                              SelectionChanged="Combo_Changed">
+                        <ComboBoxItem Content="None" Tag="0"/>
+                        <ComboBoxItem Content="5 mm" Tag="5"/>
+                        <ComboBoxItem Content="10 mm" Tag="10" IsSelected="True"/>
+                        <ComboBoxItem Content="15 mm" Tag="15"/>
+                        <ComboBoxItem Content="20 mm" Tag="20"/>
+                    </ComboBox>
+                </Grid>
+
+                <Grid x:Name="OverlapRow">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Page overlap" Style="{StaticResource FieldLabel}"
+                               ToolTip="Rows repeated at the top of the next page, so a line of text cut by a page break is still readable"/>
+                    <ComboBox x:Name="OverlapCombo" Grid.Column="1"
+                              SelectionChanged="Combo_Changed">
+                        <ComboBoxItem Content="None" Tag="0"/>
+                        <ComboBoxItem Content="Small — 24 px" Tag="24" IsSelected="True"/>
+                        <ComboBoxItem Content="Medium — 60 px" Tag="60"/>
+                        <ComboBoxItem Content="Large — 120 px" Tag="120"/>
+                    </ComboBox>
+                </Grid>
+
+                <Grid x:Name="ZoomRow" Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Zoom" Style="{StaticResource FieldLabel}"
+                               ToolTip="100% puts the full width of the image on one page. Zoom in to make it bigger and more readable, at the cost of more pages."/>
+                    <Slider x:Name="ZoomSliderCtl" Grid.Column="1"
+                            Style="{StaticResource ZoomSlider}"
+                            Minimum="20" Maximum="400" Value="100"
+                            SmallChange="5" LargeChange="25"
+                            TickFrequency="5" IsSnapToTickEnabled="True"
+                            ValueChanged="Zoom_Changed"/>
+                    <TextBlock x:Name="ZoomText" Grid.Column="2"
+                               Width="46" TextAlignment="Right" VerticalAlignment="Center"
+                               Foreground="{DynamicResource Brush.TextFaint}" FontSize="12"/>
+                    <Button x:Name="ZoomResetBtn" Grid.Column="3"
+                            Style="{StaticResource Ghost}"
+                            Content="Fit width" Padding="10,3" FontSize="11"
+                            Margin="10,0,0,0" Click="ZoomReset_Click"
+                            ToolTip="Back to 100% — the whole image width on one page"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- Quality -->
+        <Border Background="{DynamicResource Brush.Card}"
+                BorderBrush="{DynamicResource Brush.Border}"
+                BorderThickness="1" CornerRadius="8"
+                Padding="16,14" Margin="0,12,0,0">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Image quality" Style="{StaticResource FieldLabel}"/>
+                    <ComboBox x:Name="QualityCombo" Grid.Column="1"
+                              SelectionChanged="Combo_Changed">
+                        <ComboBoxItem Content="Lossless — best for text" IsSelected="True"/>
+                        <ComboBoxItem Content="JPEG — smaller file, softer text"/>
+                    </ComboBox>
+                </Grid>
+
+                <Grid x:Name="JpegRow" Margin="0,10,0,0" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="JPEG quality" Style="{StaticResource FieldLabel}"/>
+                    <ComboBox x:Name="JpegCombo" Grid.Column="1"
+                              SelectionChanged="Combo_Changed">
+                        <ComboBoxItem Content="Maximum — 95" Tag="95"/>
+                        <ComboBoxItem Content="High — 88" Tag="88" IsSelected="True"/>
+                        <ComboBoxItem Content="Medium — 75" Tag="75"/>
+                        <ComboBoxItem Content="Small file — 60" Tag="60"/>
+                    </ComboBox>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- What this will produce -->
+        <Border Background="{DynamicResource Brush.Subtle}"
+                CornerRadius="8" Padding="14,12" Margin="0,12,0,0">
+            <StackPanel>
+                <TextBlock x:Name="SummaryTitle"
+                           FontSize="13" FontWeight="SemiBold"
+                           Foreground="{DynamicResource Brush.TextHeading}"/>
+                <TextBlock x:Name="SummaryDetail"
+                           FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"
+                           Foreground="{DynamicResource Brush.TextFaint}"/>
+            </StackPanel>
+        </Border>
+
+        <TextBlock x:Name="StatusText"
+                   FontSize="12" Margin="2,12,0,0"
+                   Foreground="{DynamicResource Brush.TextFaint}"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button x:Name="CancelBtn" Style="{StaticResource Ghost}"
+                    Content="Cancel" Click="Cancel_Click" Margin="0,0,10,0"/>
+            <Button x:Name="ExportBtn" Style="{StaticResource Primary}"
+                    Content="Export…" Click="Export_Click" IsDefault="True"/>
+        </StackPanel>
+    </StackPanel>
+
+    <!-- Live preview. Drawn from exactly the same page planner the writer uses, so
+         what is shown here is what comes out. -->
+    <StackPanel Grid.Column="1" Width="320">
+        <TextBlock Text="Preview" FontSize="13" FontWeight="SemiBold"
+                   Foreground="{DynamicResource Brush.TextHeading}" Margin="0,2,0,8"/>
+
+        <Border Background="{DynamicResource Brush.Subtle}"
+                BorderBrush="{DynamicResource Brush.Border}"
+                BorderThickness="1" CornerRadius="8"
+                Height="420" Padding="14">
+            <Grid>
+                <!-- The sheet of paper -->
+                <Border x:Name="PageShadow"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Background="White"
+                        BorderBrush="{DynamicResource Brush.BorderStrong}"
+                        BorderThickness="1">
+                    <Canvas x:Name="PageCanvas" ClipToBounds="True">
+                        <!-- The slice of the image that lands on this page -->
+                        <Image x:Name="SliceImage"
+                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                        <!-- Printable area, so the margin is visible -->
+                        <Rectangle x:Name="MarginGuide"
+                                   Stroke="{DynamicResource Brush.Accent}"
+                                   StrokeThickness="1"
+                                   StrokeDashArray="3 3"
+                                   Opacity="0.55"
+                                   IsHitTestVisible="False"/>
+                    </Canvas>
+                </Border>
+
+                <TextBlock x:Name="PreviewEmpty"
+                           Text="Nothing to preview"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Foreground="{DynamicResource Brush.TextMuted}"
+                           FontSize="12" Visibility="Collapsed"/>
+            </Grid>
+        </Border>
+
+        <DockPanel Margin="0,10,0,0">
+            <Button x:Name="PrevPageBtn" DockPanel.Dock="Left"
+                    Style="{StaticResource Ghost}" Content="◀"
+                    Padding="12,4" Click="PrevPage_Click"/>
+            <Button x:Name="NextPageBtn" DockPanel.Dock="Right"
+                    Style="{StaticResource Ghost}" Content="▶"
+                    Padding="12,4" Click="NextPage_Click"/>
+            <TextBlock x:Name="PageLabel"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       FontSize="12"
+                       Foreground="{DynamicResource Brush.TextBody}"/>
+        </DockPanel>
+
+        <TextBlock x:Name="PageDetail"
+                   FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"
+                   TextAlignment="Center"
+                   Foreground="{DynamicResource Brush.TextMuted}"/>
+    </StackPanel>
+    </Grid>
+</Window>

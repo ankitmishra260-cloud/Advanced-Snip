@@ -1,0 +1,100 @@
+<!--
+    Quantum Obsidian (Bioluminescent) Theme.
+    Utilizes advanced WPF graphical features:
+      * Radial spotlight ambient light emission with off-center gradient origins
+      * Specular-bevel multi-stop glassmorphic card reflections
+      * Radial bioluminescent aura glow on hover
+      * Chromatic celestial beam on active navigation
+      * Ultra-crisp diamond typography
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:po="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    mc:Ignorable="po">
+
+    <!-- Window Background: Advanced Radial Spotlight ambient light diffusion radiating across velvet onyx -->
+    <RadialGradientBrush x:Key="Brush.Window" Center="0.15,0.0" GradientOrigin="0.15,0.0" RadiusX="1.3" RadiusY="1.4" po:Freeze="True">
+        <GradientStop Offset="0.00" Color="#FF1E2C44"/>
+        <GradientStop Offset="0.25" Color="#FF131C2D"/>
+        <GradientStop Offset="0.55" Color="#FF0B101C"/>
+        <GradientStop Offset="1.00" Color="#FF04060C"/>
+    </RadialGradientBrush>
+
+    <!-- Sidebar: Ambient top-radiant column lighting -->
+    <RadialGradientBrush x:Key="Brush.Sidebar" Center="0.5,0.0" GradientOrigin="0.5,0.0" RadiusX="1.4" RadiusY="1.1" po:Freeze="True">
+        <GradientStop Offset="0.00" Color="#FF19253B"/>
+        <GradientStop Offset="0.40" Color="#FF0F1727"/>
+        <GradientStop Offset="1.00" Color="#FF060912"/>
+    </RadialGradientBrush>
+
+    <!-- Active Navigation Pill: 5-stop molten celestial cyan-sapphire radiant light beam -->
+    <LinearGradientBrush x:Key="Brush.NavActive" StartPoint="0,0" EndPoint="1,0" po:Freeze="True">
+        <GradientStop Offset="0.00" Color="#FF00E5FF"/>
+        <GradientStop Offset="0.18" Color="#FF0091FF"/>
+        <GradientStop Offset="0.52" Color="#FF004CE8"/>
+        <GradientStop Offset="0.85" Color="#FF0E1A36"/>
+        <GradientStop Offset="1.00" Color="#000E1A36"/>
+    </LinearGradientBrush>
+
+    <!-- Cards: Specular top-lit glassmorphic obsidian tiles -->
+    <LinearGradientBrush x:Key="Brush.Card" StartPoint="0,0" EndPoint="0,1" po:Freeze="True">
+        <GradientStop Offset="0.00" Color="#FF182236"/>
+        <GradientStop Offset="0.08" Color="#FF111827"/>
+        <GradientStop Offset="0.90" Color="#FF0C121E"/>
+        <GradientStop Offset="1.00" Color="#FF080C16"/>
+    </LinearGradientBrush>
+
+    <!-- Inputs & controls -->
+    <LinearGradientBrush x:Key="Brush.Input" StartPoint="0,0" EndPoint="0,1" po:Freeze="True">
+        <GradientStop Offset="0.0" Color="#FF172338"/>
+        <GradientStop Offset="1.0" Color="#FF101828"/>
+    </LinearGradientBrush>
+
+    <SolidColorBrush x:Key="Brush.Subtle" Color="#FF0A0E18" po:Freeze="True"/>
+
+    <!-- Hover: Radial bioluminescent aura glow expanding from center of hovered element -->
+    <RadialGradientBrush x:Key="Brush.Hover" Center="0.5,0.5" GradientOrigin="0.5,0.5" RadiusX="0.75" RadiusY="0.75" po:Freeze="True">
+        <GradientStop Offset="0.00" Color="#6600E5FF"/>
+        <GradientStop Offset="0.70" Color="#4D0091FF"/>
+        <GradientStop Offset="1.00" Color="#26004CE8"/>
+    </RadialGradientBrush>
+
+    <!-- Window Edge: Glowing specular titanium-cyan border -->
+    <LinearGradientBrush x:Key="Brush.WindowEdge" StartPoint="0,0" EndPoint="1,1" po:Freeze="True">
+        <GradientStop Offset="0.00" Color="#FF00E5FF"/>
+        <GradientStop Offset="0.35" Color="#FF38BDF8"/>
+        <GradientStop Offset="0.70" Color="#FF818CF8"/>
+        <GradientStop Offset="1.00" Color="#FF00E5FF"/>
+    </LinearGradientBrush>
+
+    <!-- Lines & structural borders -->
+    <SolidColorBrush x:Key="Brush.Border"       Color="#FF1E2E4B" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.BorderInput"  Color="#FF2E446E" po:Freeze="True"/>
+
+    <!-- Hovered Borders: High-luminance multi-stop electric cyan/azure highlight -->
+    <LinearGradientBrush x:Key="Brush.BorderStrong" StartPoint="0,0" EndPoint="1,0.8" po:Freeze="True">
+        <GradientStop Offset="0.00" Color="#FF00E5FF"/>
+        <GradientStop Offset="0.45" Color="#FF38BDF8"/>
+        <GradientStop Offset="1.00" Color="#FF1D4ED8"/>
+    </LinearGradientBrush>
+
+    <!-- Typography: pure diamond white & glowing high-contrast cool silver/lavender -->
+    <SolidColorBrush x:Key="Brush.Text"         Color="#FFFFFFFF" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextHeading"  Color="#FFF0F9FF" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextBody"     Color="#FFE2E8F0" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextFaint"    Color="#FFCBD5E1" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextMuted"    Color="#FF94A3B8" po:Freeze="True"/>
+
+    <!-- Accent + status: electric celestial cyan, sapphire glow, radiant emerald -->
+    <SolidColorBrush x:Key="Brush.Accent"       Color="#FF00E5FF" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.AccentHover"  Color="#FF38BDF8" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.AccentSoft"   Color="#FF002E66" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.OnAccent"     Color="#FF020617" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Success"      Color="#FF00F59B" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Warning"      Color="#FFFFB800" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Danger"       Color="#FFFF1744" po:Freeze="True"/>
+
+    <!-- Editor canvas backdrop -->
+    <SolidColorBrush x:Key="Brush.CanvasBack"   Color="#FF080C16" po:Freeze="True"/>
+</ResourceDictionary>

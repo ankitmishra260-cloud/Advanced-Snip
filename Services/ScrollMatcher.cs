@@ -33,10 +33,10 @@ namespace AdvancedSnip.Services
     internal static class ScrollMatcher
     {
         /// <summary>Rows sampled when testing a candidate offset.</summary>
-        private const int SampleRows = 40;
+        private const int SampleRows = 50;
 
         /// <summary>Above this average per-cell mismatch we don't believe the match.</summary>
-        private const double MaxAcceptableCost = 14.0;
+        private const double MaxAcceptableCost = 24.0;
 
         /// <summary>Is the band identical in both frames (i.e. nothing scrolled)?</summary>
         internal static bool BandUnchanged(CaptureFrame a, CaptureFrame b, int top, int bottom)
@@ -45,16 +45,16 @@ namespace AdvancedSnip.Services
             bottom = Math.Min(Math.Min(a.Height, b.Height), bottom);
             if (bottom - top < 4) return true;
 
-            int step = Math.Max(1, (bottom - top) / 60);
+            int step = Math.Max(1, (bottom - top) / 80);
             int checkedRows = 0, differing = 0;
 
             for (int y = top; y < bottom; y += step)
             {
                 checkedRows++;
                 if (!a.RowsSimilar(y, b, y)) differing++;
-                if (differing > 1) return false;   // more than a stray row changed
+                if (differing > 2) return false;   // more than stray rows changed
             }
-            return checkedRows == 0 || differing <= 1;
+            return checkedRows == 0 || differing <= 2;
         }
 
         /// <summary>
@@ -77,12 +77,12 @@ namespace AdvancedSnip.Services
             if (BandUnchanged(prev, cur, top, bottom))
                 return ShiftResult.None;
 
-            // Sample rows from the upper part of the band: after scrolling down, this
-            // content came from lower in the previous frame, so a match is available.
-            int sampleSpan = Math.Max(8, bandH / 2);
+            // Sample rows from the upper-to-middle part of the band: after scrolling down,
+            // this content came from lower in the previous frame, so a match is available.
+            int sampleSpan = Math.Max(12, (int)(bandH * 0.65));
             int sampleStep = Math.Max(1, sampleSpan / SampleRows);
 
-            var rows = new List<int>(SampleRows + 2);
+            var rows = new List<int>(SampleRows + 4);
             for (int y = top; y < top + sampleSpan && rows.Count < SampleRows; y += sampleStep)
                 rows.Add(y);
             if (rows.Count == 0) return ShiftResult.Failed;
@@ -118,7 +118,7 @@ namespace AdvancedSnip.Services
             // Gather every offset that's within a whisker of the best, then prefer the one
             // closest to what we expected. Repetitive layouts produce many near-equal
             // minima and blindly taking the global best is how a stitch skips a screenful.
-            double threshold = Math.Max(bestCost * 1.25, bestCost + 0.6);
+            double threshold = Math.Max(bestCost * 1.30, bestCost + 1.0);
             int chosen = best;
 
             if (expectedDelta > 0)
@@ -148,14 +148,10 @@ namespace AdvancedSnip.Services
         /// Works out which rows actually scroll, by looking at what changed between two
         /// frames taken one small scroll apart.
         ///
-        /// This is what keeps browser chrome, sticky navigation bars, Explorer column
-        /// headers, status bars and docked side panels out of the stitched result: they
-        /// don't move, so they aren't in the changed run. It needs no accessibility API
-        /// and works the same in every application.
-        ///
-        /// We take the longest continuous run of changed rows rather than every changed
-        /// row, so a blinking caret or an animated avatar elsewhere in the window can't
-        /// stretch the region.
+        /// This is what keeps browser chrome, sticky navigation bars, sticky table headers,
+        /// Explorer column headers, status bars and fixed cookie footers out of the stitched
+        /// result: they don't move during scrolling, so they are isolated from the scrolling
+        /// band and never repeated.
         /// </summary>
         internal static bool TryFindScrollBand(CaptureFrame a, CaptureFrame b,
                                                out int top, out int bottom)
@@ -167,44 +163,51 @@ namespace AdvancedSnip.Services
             if (h < 32) return false;
 
             var changed = new bool[h];
+            int totalChanged = 0;
             for (int y = 0; y < h; y++)
+            {
                 changed[y] = !a.RowsSimilar(y, b, y);
-
-            // Bridge short static gaps (a blank line between paragraphs may be identical
-            // before and after a scroll purely by chance).
-            const int bridge = 12;
-            int runStart = -1, bestStart = -1, bestLen = 0;
-            int gap = 0;
-
-            for (int y = 0; y < h; y++)
-            {
-                if (changed[y])
-                {
-                    if (runStart < 0) runStart = y;
-                    gap = 0;
-                }
-                else if (runStart >= 0)
-                {
-                    gap++;
-                    if (gap > bridge)
-                    {
-                        int len = (y - gap) - runStart;
-                        if (len > bestLen) { bestLen = len; bestStart = runStart; }
-                        runStart = -1;
-                        gap = 0;
-                    }
-                }
-            }
-            if (runStart >= 0)
-            {
-                int len = h - runStart - gap;
-                if (len > bestLen) { bestLen = len; bestStart = runStart; }
+                if (changed[y]) totalChanged++;
             }
 
-            if (bestStart < 0 || bestLen < Math.Max(48, h / 5)) return false;
+            // If virtually nothing changed, scrolling hasn't occurred.
+            if (totalChanged < 4) return false;
 
-            top = bestStart;
-            bottom = bestStart + bestLen;
+            // 1. Identify top sticky elements (fixed headers, navbars, table headers, toolbars).
+            // Scan down to find the first sustained changed row (at least 2 changed rows in a 4-row window).
+            int firstChanged = 0;
+            for (int y = 0; y < h - 4; y++)
+            {
+                int count = (changed[y] ? 1 : 0) + (changed[y + 1] ? 1 : 0) +
+                            (changed[y + 2] ? 1 : 0) + (changed[y + 3] ? 1 : 0);
+                if (count >= 2)
+                {
+                    firstChanged = y;
+                    break;
+                }
+            }
+
+            // 2. Identify bottom sticky elements (fixed footers, cookie banners, status bars).
+            // Scan up from the bottom to find the last sustained changed row.
+            int lastChanged = h;
+            for (int y = h - 1; y >= 3; y--)
+            {
+                int count = (changed[y] ? 1 : 0) + (changed[y - 1] ? 1 : 0) +
+                            (changed[y - 2] ? 1 : 0) + (changed[y - 3] ? 1 : 0);
+                if (count >= 2)
+                {
+                    lastChanged = y + 1;
+                    break;
+                }
+            }
+
+            if (lastChanged <= firstChanged) return false;
+
+            int span = lastChanged - firstChanged;
+            if (span < Math.Max(24, h / 10)) return false;
+
+            top = firstChanged;
+            bottom = lastChanged;
             return true;
         }
 
@@ -241,7 +244,7 @@ namespace AdvancedSnip.Services
                 for (int y = top; y + delta < bottom; y += step)
                 {
                     total++;
-                    if (cur.CellDistance(y, col, prev, y + delta) > 8) mismatched++;
+                    if (cur.CellDistance(y, col, prev, y + delta) > 12) mismatched++;
                 }
 
                 if (total < 6) return 0;

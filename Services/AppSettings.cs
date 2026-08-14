@@ -83,8 +83,8 @@ namespace AdvancedSnip.Services
         public bool ScrollRestorePosition { get; set; } = true;
 
         // ---- appearance ----
-        /// <summary>"System", "Light" or "Dark".</summary>
-        public string Theme { get; set; } = "System";
+        /// <summary>"BlueNeonLight" by default, or "System", "Light", "Dark", "BlueNeon", etc.</summary>
+        public string Theme { get; set; } = "BlueNeonLight";
 
         // ---- gallery ----
         /// <summary>One of the SortKey values below; see GallerySortValue.</summary>
@@ -95,6 +95,64 @@ namespace AdvancedSnip.Services
         public bool GalleryUseRecycleBin { get; set; } = true;
         /// <summary>Search the words inside captures, not just their file names.</summary>
         public bool GalleryOcrSearch { get; set; } = true;
+
+        // ---- screen recording ----
+        /// <summary>Where videos go. Empty means "next to the screenshots".</summary>
+        public string VideoFolder { get; set; } = "";
+        public string VideoPrefix { get; set; } = "Recording";
+        /// <summary>"Efficient", "Balanced", "High" or "Maximum".</summary>
+        public string RecordQuality { get; set; } = "Balanced";
+        public int  RecordFps { get; set; } = 30;
+        /// <summary>"Screen", "Monitor" or "Region" - what the next recording captures.</summary>
+        /// <summary>
+        /// "Monitor" (the display under the pointer), "Screen" (the whole virtual desktop
+        /// across every monitor) or "Region". Monitor is the default deliberately: on a
+        /// single-monitor machine it is identical to Screen, and on a multi-monitor one it
+        /// is almost always what was meant. "Everything" stitches every display into one
+        /// very wide frame, which H.264 may refuse outright and which nobody wants by
+        /// accident.
+        /// </summary>
+        public string RecordSource { get; set; } = "Monitor";
+        public bool RecordCursor { get; set; } = true;
+        /// <summary>Show the drawing overlay and its pen tools while recording.</summary>
+        public bool RecordAnnotations { get; set; } = true;
+        /// <summary>Seconds of countdown before recording actually begins. 0 disables it.</summary>
+        public int  RecordCountdown { get; set; } = 3;
+
+        /// <summary>
+        /// Keep the tool picker open during a recording instead of summoning it per change.
+        ///
+        /// Saved rather than reset each time on purpose: how much annotating someone does
+        /// is a property of the person, not of the recording, so it should be decided once
+        /// and then left alone.
+        /// </summary>
+        public bool RecordToolsPinned { get; set; } = false;
+
+        /// <summary>
+        /// Where the pinned picker was left, in physical pixels. <see cref="int.MinValue"/>
+        /// means "never placed" — a real coordinate can legitimately be negative on a
+        /// multi-monitor desktop, so 0 would not do as the unset value.
+        /// </summary>
+        public int RecordToolsX { get; set; } = int.MinValue;
+        public int RecordToolsY { get; set; } = int.MinValue;
+
+        // ---- recording sound ----
+        /// <summary>Record what the machine is playing, via WASAPI loopback.</summary>
+        public bool RecordSystemAudio { get; set; } = true;
+        /// <summary>Record the microphone as well.</summary>
+        public bool RecordMicrophone { get; set; } = false;
+
+        /// <summary>
+        /// Endpoint ids, or empty for "whatever Windows is currently using". Empty is the
+        /// better default by a wide margin: a saved id stops working the moment a headset
+        /// is unplugged, while the default follows the user's own choice of device.
+        /// </summary>
+        public string RecordSystemDevice { get; set; } = "";
+        public string RecordMicDevice { get; set; } = "";
+
+        /// <summary>Levels in percent, 0-200. 100 is unity gain.</summary>
+        public int RecordSystemVolume { get; set; } = 100;
+        public int RecordMicVolume { get; set; } = 100;
 
         // ---- editor ----
         /// <summary>Clicking the "saved" notification opens the capture for editing.</summary>
@@ -108,9 +166,24 @@ namespace AdvancedSnip.Services
         // ---- hotkeys ----
         public HotkeyDef SnipHotkey          { get; set; } = new(ModifierKeys.Control | ModifierKeys.Shift, Key.S);
         public HotkeyDef ScrollCaptureHotkey { get; set; } = new(ModifierKeys.Control | ModifierKeys.Shift, Key.W);
+        public HotkeyDef OcrHotkey           { get; set; } = new(ModifierKeys.Control | ModifierKeys.Shift, Key.O);
         public HotkeyDef HistoryHotkey       { get; set; } = new(ModifierKeys.Control | ModifierKeys.Shift, Key.V);
         public HotkeyDef NextHotkey          { get; set; } = new(ModifierKeys.Control | ModifierKeys.Shift, Key.OemPeriod);
         public HotkeyDef PrevHotkey          { get; set; } = new(ModifierKeys.Control | ModifierKeys.Shift, Key.OemComma);
+        public HotkeyDef RecordHotkey        { get; set; } = new(ModifierKeys.Control | ModifierKeys.Shift, Key.R);
+
+        /// <summary>The quality preset as the recorder's own enum.</summary>
+        public VideoQuality RecordQualityValue => RecordQuality switch
+        {
+            "Efficient" => VideoQuality.Efficient,
+            "High"      => VideoQuality.High,
+            "Maximum"   => VideoQuality.Maximum,
+            _           => VideoQuality.Balanced
+        };
+
+        /// <summary>Where recordings go, falling back to the screenshot folder.</summary>
+        public string VideoFolderOrDefault =>
+            string.IsNullOrWhiteSpace(VideoFolder) ? SaveFolder : VideoFolder;
 
         // ---- persistence ----
         private static string ConfigDir =>
@@ -175,6 +248,24 @@ namespace AdvancedSnip.Services
             HistoryHotkey       = new HotkeyDef { Modifiers = HistoryHotkey.Modifiers,       Key = HistoryHotkey.Key       },
             NextHotkey          = new HotkeyDef { Modifiers = NextHotkey.Modifiers,          Key = NextHotkey.Key          },
             PrevHotkey          = new HotkeyDef { Modifiers = PrevHotkey.Modifiers,          Key = PrevHotkey.Key          },
+            RecordHotkey        = new HotkeyDef { Modifiers = RecordHotkey.Modifiers,        Key = RecordHotkey.Key        },
+            VideoFolder           = VideoFolder,
+            VideoPrefix           = VideoPrefix,
+            RecordQuality         = RecordQuality,
+            RecordFps             = RecordFps,
+            RecordSource          = RecordSource,
+            RecordCursor          = RecordCursor,
+            RecordAnnotations     = RecordAnnotations,
+            RecordCountdown       = RecordCountdown,
+            RecordToolsPinned     = RecordToolsPinned,
+            RecordToolsX          = RecordToolsX,
+            RecordToolsY          = RecordToolsY,
+            RecordSystemAudio     = RecordSystemAudio,
+            RecordMicrophone      = RecordMicrophone,
+            RecordSystemDevice    = RecordSystemDevice,
+            RecordMicDevice       = RecordMicDevice,
+            RecordSystemVolume    = RecordSystemVolume,
+            RecordMicVolume       = RecordMicVolume,
         };
 
         /// <summary>
@@ -194,10 +285,20 @@ namespace AdvancedSnip.Services
             if (string.IsNullOrWhiteSpace(ImageFormat))   ImageFormat   = "PNG";
             if (string.IsNullOrWhiteSpace(FilenamePrefix))FilenamePrefix= "Snip";
             if (JpegQuality < 1 || JpegQuality > 100)    JpegQuality   = 90;
+            if (RecordFps < 5 || RecordFps > 60)         RecordFps     = 30;
+            if (RecordCountdown < 0 || RecordCountdown > 10) RecordCountdown = 3;
+            if (string.IsNullOrWhiteSpace(VideoPrefix))  VideoPrefix   = "Recording";
+            if (RecordQuality is not ("Efficient" or "Balanced" or "High" or "Maximum"))
+                RecordQuality = "Balanced";
+            if (RecordSystemVolume < 0 || RecordSystemVolume > 200) RecordSystemVolume = 100;
+            if (RecordMicVolume    < 0 || RecordMicVolume    > 200) RecordMicVolume    = 100;
             if (MaxHistory < 5)   MaxHistory   = 5;
             if (OverlayOpacity < 0 || OverlayOpacity > 100) OverlayOpacity = 55;
             if (ScrollMaxHeight < 2000 || ScrollMaxHeight > 60000) ScrollMaxHeight = 20000;
-            if (Theme != "System" && Theme != "Light" && Theme != "Dark") Theme = "System";
+            // Every value ThemeManager.Parse understands has to be listed here, or a valid
+            // choice is quietly reset to System on the next launch and the user's setting
+            // appears not to have stuck.
+            if (Theme is not ("System" or "Light" or "Dark" or "Cyberpunk" or "Sunset" or "NeonDark" or "DarkNeon" or "LightNeon" or "BlueNeon" or "BlueNeonLight" or "PrismAurora" or "EmeraldMatrix" or "SolarFlare" or "RoseQuartz" or "MidnightAmethyst")) Theme = "BlueNeonLight";
             if (GalleryPageSize < 50 || GalleryPageSize > 500) GalleryPageSize = 150;
             if (string.IsNullOrWhiteSpace(GallerySort)) GallerySort = "NewestFirst";
             if (string.IsNullOrWhiteSpace(ScrollSpeed) ||

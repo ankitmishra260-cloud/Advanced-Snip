@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Edit capture"
+        Icon="ASico.ico"
         Width="1040" Height="740"
         MinWidth="720" MinHeight="520"
         FontFamily="Segoe UI"
@@ -121,6 +122,16 @@
             <Setter Property="Padding" Value="16,8"/>
         </Style>
 
+        <!-- The small uppercase word that names a group of buttons. Sits beside the
+             group rather than above it, so naming the categories costs no extra height. -->
+        <Style x:Key="GroupLabel" TargetType="TextBlock">
+            <Setter Property="FontSize"            Value="9.5"/>
+            <Setter Property="FontWeight"          Value="SemiBold"/>
+            <Setter Property="Foreground"          Value="{DynamicResource Brush.TextMuted}"/>
+            <Setter Property="VerticalAlignment"   Value="Center"/>
+            <Setter Property="Margin"              Value="4,0,7,0"/>
+        </Style>
+
         <Style x:Key="Sep" TargetType="Rectangle">
             <Setter Property="Width"  Value="1"/>
             <Setter Property="Margin" Value="7,8"/>
@@ -135,85 +146,122 @@
                 Background="{DynamicResource Brush.Card}"
                 BorderBrush="{DynamicResource Brush.Border}"
                 BorderThickness="0,0,0,1">
-            <WrapPanel Orientation="Horizontal" Margin="8,6" >
+            <!-- Grouped by what each control acts on, and captioned so the grouping is
+                 stated rather than implied by a thin line. Three groups:
 
-                <RadioButton x:Name="ToolCrop"  Style="{StaticResource ToolToggle}"
-                              Content="⛶  Crop" ToolTip="Drag a box, then press Enter (C)"
-                              Checked="Tool_Checked"/>
-                <RadioButton x:Name="ToolPen"   Style="{StaticResource ToolToggle}"
-                              Content="✎  Pen" ToolTip="Freehand draw (P)"
-                              Checked="Tool_Checked"/>
-                <RadioButton x:Name="ToolMark"  Style="{StaticResource ToolToggle}"
-                              Content="▬  Highlight" ToolTip="Translucent marker (H)"
-                              Checked="Tool_Checked"/>
-                <RadioButton x:Name="ToolRect"  Style="{StaticResource ToolToggle}"
-                              Content="▭  Box" ToolTip="Rectangle outline (R)"
-                              Checked="Tool_Checked"/>
-                <RadioButton x:Name="ToolEllipse" Style="{StaticResource ToolToggle}"
-                              Content="◯  Ellipse" ToolTip="Ellipse outline (E)"
-                              Checked="Tool_Checked"/>
-                <RadioButton x:Name="ToolArrow" Style="{StaticResource ToolToggle}"
-                              Content="↗  Arrow" ToolTip="Arrow (A)"
-                              Checked="Tool_Checked"/>
-                <RadioButton x:Name="ToolRedact" Style="{StaticResource ToolToggle}"
-                              Content="█  Redact" ToolTip="Solid block over sensitive content (B)"
-                              Checked="Tool_Checked"/>
-                <RadioButton x:Name="ToolText"   Style="{StaticResource ToolToggle}"
-                              Content="I  Select text"
-                              ToolTip="Drag across words in the picture to select and copy them (T)"
-                              Checked="Tool_Checked"/>
+                   TOOLS   — change what a drag on the picture does
+                   ADJUST  — act on the whole image, geometrically
+                   EXTRACT — pull something out of the picture
 
-                <Rectangle Style="{StaticResource Sep}"/>
+                 Undo and Redo are docked right, away from the groups: they undo any of
+                 them, so sitting inside one would claim they belong to it. A fixed
+                 position also matters for a control reached this often — the toolbar
+                 wraps on a narrow window, and a floating Undo is one that has to be
+                 hunted for.
 
-                <Button x:Name="RotateLeftBtn"  Style="{StaticResource ToolBtn}"
-                        Content="↺" ToolTip="Rotate left"  Click="RotateLeft_Click"/>
-                <Button x:Name="RotateRightBtn" Style="{StaticResource ToolBtn}"
-                        Content="↻" ToolTip="Rotate right" Click="RotateRight_Click"/>
-                <Button x:Name="FlipHBtn"       Style="{StaticResource ToolBtn}"
-                        Content="⇋" ToolTip="Flip horizontally" Click="FlipH_Click"/>
-                <Button x:Name="FlipVBtn"       Style="{StaticResource ToolBtn}"
-                        Content="⇅" ToolTip="Flip vertically"   Click="FlipV_Click"/>
+                 Colour and size moved out entirely, into the row below. They only apply
+                 to the six drawing tools, so on a bar that also has Crop, Select text and
+                 no-tool-at-all they were permanent furniture serving a sometimes-case. -->
+            <DockPanel Margin="8,6">
 
-                <Rectangle Style="{StaticResource Sep}"/>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Rectangle Style="{StaticResource Sep}"/>
+                    <Button x:Name="UndoBtn" Style="{StaticResource ToolBtn}"
+                            Content="&#x21B6; Undo" ToolTip="Ctrl+Z" Click="Undo_Click"/>
+                    <Button x:Name="RedoBtn" Style="{StaticResource ToolBtn}"
+                            Content="&#x21B7; Redo" ToolTip="Ctrl+Y" Click="Redo_Click"/>
+                </StackPanel>
 
-                <Button x:Name="OpenBtn" Style="{StaticResource ToolBtn}"
-                        Content="📂 Open"
-                        ToolTip="Open another image, or just drag one onto this window (Ctrl+O)"
-                        Click="Open_Click"/>
-                <Button x:Name="RemoveBgBtn" Style="{StaticResource ToolBtn}"
-                        Content="⬚ Remove BG"
-                        ToolTip="Make a flat background transparent"
-                        Click="RemoveBg_Click"/>
-                <Button x:Name="CopyTextBtn" Style="{StaticResource ToolBtn}"
-                        Content="🗐 Copy text"
-                        ToolTip="Read the text in this image (Ctrl+Shift+C)"
-                        Click="CopyText_Click"/>
+                <WrapPanel Orientation="Horizontal">
 
-                <Rectangle Style="{StaticResource Sep}"/>
+                    <TextBlock Text="TOOLS" Style="{StaticResource GroupLabel}"/>
+                    <RadioButton x:Name="ToolCrop"  Style="{StaticResource ToolToggle}"
+                                 Content="&#x26F6;  Crop" ToolTip="Drag a box, then press Enter (C)"
+                                 Checked="Tool_Checked"/>
+                    <RadioButton x:Name="ToolPen"   Style="{StaticResource ToolToggle}"
+                                 Content="&#x270E;  Pen" ToolTip="Freehand draw (P)"
+                                 Checked="Tool_Checked"/>
+                    <RadioButton x:Name="ToolMark"  Style="{StaticResource ToolToggle}"
+                                 Content="&#x25AC;  Marker" ToolTip="Translucent highlighter (H)"
+                                 Checked="Tool_Checked"/>
+                    <RadioButton x:Name="ToolRect"  Style="{StaticResource ToolToggle}"
+                                 Content="&#x25AD;  Box" ToolTip="Rectangle outline (R)"
+                                 Checked="Tool_Checked"/>
+                    <RadioButton x:Name="ToolEllipse" Style="{StaticResource ToolToggle}"
+                                 Content="&#x25EF;  Ellipse" ToolTip="Ellipse outline (E)"
+                                 Checked="Tool_Checked"/>
+                    <RadioButton x:Name="ToolArrow" Style="{StaticResource ToolToggle}"
+                                 Content="&#x2197;  Arrow" ToolTip="Arrow (A)"
+                                 Checked="Tool_Checked"/>
+                    <RadioButton x:Name="ToolRedact" Style="{StaticResource ToolToggle}"
+                                 Content="&#x2588;  Redact"
+                                 ToolTip="Solid block over sensitive content (B)"
+                                 Checked="Tool_Checked"/>
+                    <RadioButton x:Name="ToolText"   Style="{StaticResource ToolToggle}"
+                                 Content="I  Select text"
+                                 ToolTip="Drag across words in the picture to select and copy them (T)"
+                                 Checked="Tool_Checked"/>
 
-                <Button x:Name="UndoBtn" Style="{StaticResource ToolBtn}"
-                        Content="↶ Undo" ToolTip="Ctrl+Z" Click="Undo_Click"/>
-                <Button x:Name="RedoBtn" Style="{StaticResource ToolBtn}"
-                        Content="↷ Redo" ToolTip="Ctrl+Y" Click="Redo_Click"/>
+                    <Rectangle Style="{StaticResource Sep}"/>
 
-                <Rectangle Style="{StaticResource Sep}"/>
+                    <TextBlock Text="ADJUST" Style="{StaticResource GroupLabel}"/>
+                    <Button x:Name="RotateLeftBtn"  Style="{StaticResource ToolBtn}"
+                            Content="&#x21BA;" ToolTip="Rotate left"  Click="RotateLeft_Click"/>
+                    <Button x:Name="RotateRightBtn" Style="{StaticResource ToolBtn}"
+                            Content="&#x21BB;" ToolTip="Rotate right" Click="RotateRight_Click"/>
+                    <Button x:Name="FlipHBtn"       Style="{StaticResource ToolBtn}"
+                            Content="&#x21CB;" ToolTip="Flip horizontally" Click="FlipH_Click"/>
+                    <Button x:Name="FlipVBtn"       Style="{StaticResource ToolBtn}"
+                            Content="&#x21C5;" ToolTip="Flip vertically"   Click="FlipV_Click"/>
+
+                    <Rectangle Style="{StaticResource Sep}"/>
+
+                    <TextBlock Text="EXTRACT" Style="{StaticResource GroupLabel}"/>
+                    <Button x:Name="RemoveBgBtn" Style="{StaticResource ToolBtn}"
+                            Content="&#x2B1A; Remove background"
+                            ToolTip="Make a flat background transparent"
+                            Click="RemoveBg_Click"/>
+                    <Button x:Name="CopyTextBtn" Style="{StaticResource ToolBtn}"
+                            Content="&#x1F5D0; Copy text"
+                            ToolTip="Read the text in this image (Ctrl+Shift+C)"
+                            Click="CopyText_Click"/>
+                </WrapPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ── Drawing options ─────────────────────────────────────────────────
+             Colour and stroke width, shown only while a tool that uses them is selected.
+             They used to sit permanently on the main bar, where they were the widest
+             thing on it and meaningless for Crop, Select text, or no tool at all.
+
+             A row that appears and disappears does move the canvas, which is why it is
+             worth the trade only for controls this conditional: six of the eight tools
+             want them and the other two cannot use them at all. -->
+        <Border x:Name="DrawOptions" DockPanel.Dock="Top" Visibility="Collapsed"
+                Background="{DynamicResource Brush.Subtle}"
+                BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1"
+                Padding="12,7">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="COLOUR" Style="{StaticResource GroupLabel}"/>
 
                 <!-- Colour swatches. Tag carries the hex the code-behind parses. -->
-                <ItemsControl x:Name="SwatchList" VerticalAlignment="Center" Margin="4,0">
+                <ItemsControl x:Name="SwatchList" VerticalAlignment="Center" Margin="0,0,4,0">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                 </ItemsControl>
 
-                <TextBlock Text="Size" VerticalAlignment="Center" Margin="12,0,6,0"
-                           Foreground="{DynamicResource Brush.TextMuted}" FontSize="12"/>
-                <Slider x:Name="ThicknessSlider" Width="90" Minimum="1" Maximum="24" Value="4"
+                <Rectangle Style="{StaticResource Sep}"/>
+
+                <TextBlock Text="SIZE" Style="{StaticResource GroupLabel}"/>
+                <Slider x:Name="ThicknessSlider" Width="110" Minimum="1" Maximum="24" Value="4"
                         VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1"
                         ValueChanged="Thickness_Changed"/>
                 <TextBlock x:Name="ThicknessLabel" Text="4 px" VerticalAlignment="Center"
-                           Margin="6,0,0,0" MinWidth="34"
-                           Foreground="{DynamicResource Brush.TextMuted}" FontSize="12"/>
-            </WrapPanel>
+                           Margin="8,0,0,0" MinWidth="34"
+                           Foreground="{DynamicResource Brush.TextBody}" FontSize="12"/>
+            </StackPanel>
         </Border>
 
         <!-- ── Background removal controls ─────────────────────────────────── -->
@@ -263,8 +311,12 @@
                                FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
                                Foreground="{DynamicResource Brush.TextHeading}"/>
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <!-- Starts disabled: recognition runs after the panel opens, so
+                             for the first moment there is genuinely nothing to copy. -->
                         <Button x:Name="TextCopyBtn" Style="{StaticResource Ghost}"
-                                Content="Copy all" Padding="10,3" Click="TextCopyAll_Click"/>
+                                Content="Copy all text" Padding="10,3" IsEnabled="False"
+                                ToolTip="Put every word found in this picture on the clipboard"
+                                Click="TextCopyAll_Click"/>
                         <Button x:Name="TextCloseBtn" Style="{StaticResource Ghost}"
                                 Content="✕" Padding="8,3" Margin="6,0,0,0"
                                 Click="TextClose_Click"/>
@@ -285,8 +337,18 @@
             <DockPanel Margin="14,10">
 
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <!-- Open moved down here from the tool bar. It is a file operation, and
+                         it was sitting among drawing tools while its whole family — Copy,
+                         PDF, Export, Save — lived on this row. -->
+                    <Button x:Name="OpenBtn"   Style="{StaticResource Ghost}"
+                            Content="Open…"
+                            ToolTip="Open another image, or just drag one onto this window (Ctrl+O)"
+                            Click="Open_Click" Margin="0,0,14,0"/>
                     <Button x:Name="CopyBtn"   Style="{StaticResource Ghost}"
                             Content="Copy"    ToolTip="Ctrl+C" Click="Copy_Click"/>
+                    <Button x:Name="PdfBtn"    Style="{StaticResource Ghost}"
+                            Content="PDF…"    ToolTip="Ctrl+P — turn this into a PDF, splitting a tall image across pages"
+                            Click="Pdf_Click"/>
                     <Button x:Name="SaveAsBtn" Style="{StaticResource Ghost}"
                             Content="Export…" ToolTip="PNG, JPEG, BMP, TIFF or ICO"
                             Click="SaveAs_Click"/>
@@ -315,7 +377,8 @@
                       HorizontalScrollBarVisibility="Auto"
                       VerticalScrollBarVisibility="Auto"
                       Background="{DynamicResource Brush.CanvasBack}"
-                      PreviewMouseWheel="Scroller_PreviewMouseWheel">
+                      PreviewMouseWheel="Scroller_PreviewMouseWheel"
+                      ScrollChanged="Scroller_ScrollChanged">
             <!-- The stage is sized in code to exactly pixelWidth × zoom, so a point on
                  the overlay divides cleanly back to an image pixel with no guesswork. -->
             <Grid x:Name="Stage" HorizontalAlignment="Center" VerticalAlignment="Center"

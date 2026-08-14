@@ -12,8 +12,13 @@
         ShowInTaskbar="False"
         FontFamily="Segoe UI">
 
-    <Border CornerRadius="14"
-            Background="#FA1D2027"
+    <!-- Floating-panel chrome. Shared with the recording toolbar, the tool picker, the
+         clipboard HUD, its preview and the scroll-capture progress panel: these all
+         float over whatever is on screen, so they are fixed dark rather than themed —
+         a light panel over a light desktop has no edge. Kept identical across the five
+         because two of them share the screen during a recording. -->
+    <Border CornerRadius="12"
+            Background="#F21D2027"
             BorderBrush="#33FFFFFF"
             BorderThickness="1"
             Padding="22">

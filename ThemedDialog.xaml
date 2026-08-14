@@ -1,0 +1,116 @@
+<Window x:Class="AdvancedSnip.ThemedDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Advanced Snip"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        SizeToContent="Height"
+        Width="440"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="Segoe UI"
+        KeyDown="Dialog_KeyDown">
+
+    <!-- Its own button styles. Ghost and Primary are defined in four other windows and
+         scoped to each of them; window resources are not shared, so borrowing a key across
+         files is a parse-time failure (build-error #10). Compact copies, not a refactor:
+         moving those styles to Controls.xaml would touch every window that has one. -->
+    <Window.Resources>
+        <Style x:Key="DlgBtn" TargetType="Button">
+            <Setter Property="Height"     Value="32"/>
+            <Setter Property="MinWidth"   Value="88"/>
+            <Setter Property="Margin"     Value="8,0,0,0"/>
+            <Setter Property="Padding"    Value="16,0"/>
+            <Setter Property="FontSize"   Value="13"/>
+            <Setter Property="Cursor"     Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextBody}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="6"
+                                Background="{DynamicResource Brush.Subtle}"
+                                BorderBrush="{DynamicResource Brush.Border}"
+                                BorderThickness="1"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background"
+                                        Value="{DynamicResource Brush.Hover}"/>
+                                <Setter TargetName="Bd" Property="BorderBrush"
+                                        Value="{DynamicResource Brush.BorderStrong}"/>
+                                <Setter Property="Foreground"
+                                        Value="{DynamicResource Brush.Text}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DlgPrimary" TargetType="Button" BasedOn="{StaticResource DlgBtn}">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.OnAccent}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="6"
+                                Background="{DynamicResource Brush.Accent}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background"
+                                        Value="{DynamicResource Brush.AccentHover}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border CornerRadius="10"
+            Background="{DynamicResource Brush.Card}"
+            BorderBrush="{DynamicResource Brush.WindowEdge}"
+            BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.45" Color="Black"/>
+        </Border.Effect>
+
+        <DockPanel Margin="22,20,22,18">
+
+            <!-- Its own title strip. There is no OS caption to darken, which is the whole
+                 point: a system MessageBox in a dark app is a light-titled box that
+                 belongs to a different application. -->
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,14">
+                <TextBlock x:Name="IconGlyph" DockPanel.Dock="Left"
+                           FontSize="20" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="TitleText" FontSize="15" FontWeight="SemiBold"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource Brush.TextHeading}"/>
+            </DockPanel>
+
+            <StackPanel x:Name="ButtonRow" DockPanel.Dock="Bottom"
+                        Orientation="Horizontal" HorizontalAlignment="Right"
+                        Margin="0,18,0,0">
+                <Button x:Name="ThirdBtn"  Style="{StaticResource DlgBtn}"
+                        Visibility="Collapsed" Click="Third_Click"/>
+                <Button x:Name="SecondBtn" Style="{StaticResource DlgBtn}"
+                        Visibility="Collapsed" Click="Second_Click"/>
+                <Button x:Name="FirstBtn"  Style="{StaticResource DlgPrimary}"
+                        Click="First_Click"/>
+            </StackPanel>
+
+            <TextBlock x:Name="MessageText" TextWrapping="Wrap" FontSize="13"
+                       LineHeight="20"
+                       Foreground="{DynamicResource Brush.TextBody}"/>
+        </DockPanel>
+    </Border>
+</Window>

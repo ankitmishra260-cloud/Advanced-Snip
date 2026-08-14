@@ -10,39 +10,47 @@
     they sit on top of a screenshot and need fixed dark chrome whatever the theme.
 -->
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:po="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    mc:Ignorable="po">
 
     <!-- Surfaces -->
-    <SolidColorBrush x:Key="Brush.Window"       Color="#FFF0F2F5"/>
-    <SolidColorBrush x:Key="Brush.Sidebar"      Color="#FFFFFFFF"/>
-    <SolidColorBrush x:Key="Brush.Card"         Color="#FFFFFFFF"/>
-    <SolidColorBrush x:Key="Brush.Input"        Color="#FFFFFFFF"/>
-    <SolidColorBrush x:Key="Brush.Subtle"       Color="#FFF1F5F9"/>
-    <SolidColorBrush x:Key="Brush.Hover"        Color="#16000000"/>
-    <SolidColorBrush x:Key="Brush.NavActive"    Color="#FFE8EEFA"/>
+    <SolidColorBrush x:Key="Brush.Window"       Color="#FFE7EAF0" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Sidebar"      Color="#FFF6F8FB" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Card"         Color="#FFFBFCFE" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Input"        Color="#FFFFFFFF" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Subtle"       Color="#FFEDF1F6" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Hover"        Color="#16000000" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.NavActive"    Color="#FFE8EEFA" po:Freeze="True"/>
+
+    <!-- The outer edge of the window itself. WindowChrome runs with
+         GlassFrameThickness="0", so Windows draws no frame here and the app
+         has to draw its own — without it, a light window on a light desktop had no visible edge at all. -->
+    <SolidColorBrush x:Key="Brush.WindowEdge" Color="#FFB4BECD" po:Freeze="True"/>
 
     <!-- Lines -->
-    <SolidColorBrush x:Key="Brush.Border"       Color="#FFE2E8F0"/>
-    <SolidColorBrush x:Key="Brush.BorderInput"  Color="#FFD0D7E2"/>
-    <SolidColorBrush x:Key="Brush.BorderStrong" Color="#FFCBD5E1"/>
+    <SolidColorBrush x:Key="Brush.Border"       Color="#FFD3DAE4" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.BorderInput"  Color="#FFC2CBD8" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.BorderStrong" Color="#FFA9B4C4" po:Freeze="True"/>
 
     <!-- Type -->
-    <SolidColorBrush x:Key="Brush.Text"         Color="#FF1E293B"/>
-    <SolidColorBrush x:Key="Brush.TextHeading"  Color="#FF334155"/>
-    <SolidColorBrush x:Key="Brush.TextBody"     Color="#FF475569"/>
-    <SolidColorBrush x:Key="Brush.TextFaint"    Color="#FF64748B"/>
-    <SolidColorBrush x:Key="Brush.TextMuted"    Color="#FF94A3B8"/>
+    <SolidColorBrush x:Key="Brush.Text"         Color="#FF0F172A" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextHeading"  Color="#FF1E293B" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextBody"     Color="#FF334155" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextFaint"    Color="#FF475569" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextMuted"    Color="#FF5A677B" po:Freeze="True"/>
 
     <!-- Accent + status -->
-    <SolidColorBrush x:Key="Brush.Accent"       Color="#FF3B82F6"/>
-    <SolidColorBrush x:Key="Brush.AccentHover"  Color="#FF2563EB"/>
-    <SolidColorBrush x:Key="Brush.AccentSoft"   Color="#FFBFDBFE"/>
-    <SolidColorBrush x:Key="Brush.OnAccent"     Color="#FFFFFFFF"/>
-    <SolidColorBrush x:Key="Brush.Success"      Color="#FF16A34A"/>
-    <SolidColorBrush x:Key="Brush.Warning"      Color="#FFD97706"/>
-    <SolidColorBrush x:Key="Brush.Danger"       Color="#FFDC2626"/>
+    <SolidColorBrush x:Key="Brush.Accent"       Color="#FF3B82F6" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.AccentHover"  Color="#FF2563EB" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.AccentSoft"   Color="#FFBFDBFE" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.OnAccent"     Color="#FFFFFFFF" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Success"      Color="#FF16A34A" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Warning"      Color="#FFD97706" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Danger"       Color="#FFDC2626" po:Freeze="True"/>
 
     <!-- The editor's canvas surround: deliberately mid-grey in both themes so a
          screenshot with white or black edges still reads as an image, not as chrome. -->
-    <SolidColorBrush x:Key="Brush.CanvasBack"   Color="#FF8A9099"/>
+    <SolidColorBrush x:Key="Brush.CanvasBack"   Color="#FF8A9099" po:Freeze="True"/>
 </ResourceDictionary>

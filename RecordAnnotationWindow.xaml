@@ -1,0 +1,70 @@
+<Window x:Class="AdvancedSnip.RecordAnnotationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Annotations"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Topmost="True"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual">
+
+    <Grid x:Name="RootGrid"
+          Background="#01000000"
+          MouseLeftButtonDown="Root_MouseDown"
+          MouseMove="Root_MouseMove"
+          MouseLeftButtonUp="Root_MouseUp"
+          MouseRightButtonUp="Root_RightClick"
+          MouseWheel="Root_MouseWheel">
+
+        <!-- Finished work. Shapes below ink, matching the order the recorder paints
+             them into each frame, so what is on screen is what lands in the video. -->
+        <Canvas x:Name="ShapeLayerCanvas" IsHitTestVisible="False"/>
+        <Canvas x:Name="InkLayer" IsHitTestVisible="False"/>
+
+        <!-- The shape currently being dragged out. Kept on its own canvas so it can be
+             thrown away and redrawn on every mouse-move without disturbing anything
+             already committed. -->
+        <Canvas x:Name="PreviewLayer" IsHitTestVisible="False"/>
+
+        <!-- What the viewer will see while zoomed. Drawn here rather than in the frame,
+             so it guides the presenter without appearing in the recording. -->
+        <Canvas x:Name="ZoomLayer" IsHitTestVisible="False" Visibility="Collapsed">
+            <Rectangle x:Name="ZoomBox" Stroke="#FF3B82F6" StrokeThickness="2"
+                       StrokeDashArray="6 4" RadiusX="3" RadiusY="3"/>
+        </Canvas>
+
+        <!-- A small badge naming the active tool, pinned to the top of the recorded
+             region. Without it there is no way to tell pen from marker from arrow
+             except by drawing something and undoing it. -->
+        <Border x:Name="ToolBadge" Visibility="Collapsed"
+                HorizontalAlignment="Center" VerticalAlignment="Top"
+                Margin="0,14,0,0" CornerRadius="8"
+                Background="#D91B1E24" BorderBrush="#40FFFFFF" BorderThickness="1"
+                Padding="12,6" IsHitTestVisible="False">
+            <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Ellipse x:Name="BadgeDot" Width="11" Height="11" Margin="0,0,8,0"
+                             VerticalAlignment="Center" Fill="#FFEF4444"/>
+                    <TextBlock x:Name="BadgeText" Foreground="White" FontSize="12"
+                               FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="BadgeSize" Foreground="#8CFFFFFF" FontSize="11"
+                               FontFamily="Segoe UI" VerticalAlignment="Center"
+                               Margin="8,0,0,0"/>
+                    <TextBlock x:Name="BadgeHint" Foreground="#8CFFFFFF" FontSize="11"
+                               FontFamily="Segoe UI" VerticalAlignment="Center"
+                               Margin="10,0,0,0"/>
+                </StackPanel>
+
+                <!-- The modifier legend. It is on the badge rather than in the help panel
+                     because a shortcut nobody knows about is the same as one that does not
+                     exist, and this is the shortcut that removes most of the tool switching. -->
+                <TextBlock x:Name="BadgeMods" Foreground="#7093C5FD" FontSize="10.5"
+                           FontFamily="Segoe UI" Margin="19,3,0,0"
+                           Visibility="Collapsed"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
