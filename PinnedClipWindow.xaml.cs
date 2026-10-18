@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -68,7 +69,10 @@ namespace AdvancedSnip
             {
                 Record = existingRecord;
                 IsDesktopPinned = existingRecord.IsDesktopPinned;
-                IsTopmost = existingRecord.IsTopmost;
+                // Restored from desktop persistence on restart: Always initialize with Topmost = false
+                existingRecord.IsTopmost = false;
+                IsTopmost = false;
+                Topmost = false;
                 IsFrameless = existingRecord.IsDesktopPinned && existingRecord.IsFrameless;
             }
             else
@@ -81,6 +85,8 @@ namespace AdvancedSnip
                     IsDesktopPinned = false,
                     IsFrameless = false
                 };
+                IsTopmost = true;
+                Topmost = true;
                 Record.CachedImagePath = PinnedWindowManager.EnsureImagePersisted(Record.Id, image, filePath);
                 PinnedWindowManager.RegisterRecord(Record);
             }
@@ -156,6 +162,16 @@ namespace AdvancedSnip
             const int WM_SYSCOMMAND = 0x0112;
             const int SC_MAXIMIZE = 0xF030;
             const int WM_NCLBUTTONDBLCLK = 0x00A3;
+            const int WM_NCHITTEST = 0x0084;
+            const int WM_GETMINMAXINFO = 0x0024;
+            const int HTLEFT = 10;
+            const int HTRIGHT = 11;
+            const int HTTOP = 12;
+            const int HTTOPLEFT = 13;
+            const int HTTOPRIGHT = 14;
+            const int HTBOTTOM = 15;
+            const int HTBOTTOMLEFT = 16;
+            const int HTBOTTOMRIGHT = 17;
 
             if (msg == WM_SYSCOMMAND && (wParam.ToInt32() & 0xFFF0) == SC_MAXIMIZE)
             {
@@ -167,6 +183,103 @@ namespace AdvancedSnip
             {
                 handled = true;
                 return IntPtr.Zero;
+            }
+
+            if (msg == WM_NCHITTEST)
+            {
+                if (!IsLoaded || ActualWidth <= 0 || ActualHeight <= 0)
+                    return IntPtr.Zero;
+
+                int screenX = (short)(lParam.ToInt32() & 0xFFFF);
+                int screenY = (short)((lParam.ToInt32() >> 16) & 0xFFFF);
+
+                Point p;
+                try
+                {
+                    p = PointFromScreen(new Point(screenX, screenY));
+                }
+                catch
+                {
+                    return IntPtr.Zero;
+                }
+
+                // If cursor is directly over any interactive button, do not intercept so clicks work
+                try
+                {
+                    if (VisualTreeHelper.HitTest(this, p) is PointHitTestResult hit && FindParentButton(hit.VisualHit) != null)
+                    {
+                        return IntPtr.Zero;
+                    }
+                }
+                catch { }
+
+                double w = ActualWidth;
+                double h = ActualHeight;
+                const double resizeBorder = 8.0;
+                const double cornerBorder = 18.0;
+
+                bool leftCorner = p.X <= cornerBorder;
+                bool rightCorner = p.X >= w - cornerBorder;
+                bool topCorner = p.Y <= cornerBorder;
+                bool bottomCorner = p.Y >= h - cornerBorder;
+
+                // 1. All 4 Corners (Generous 18px hit zone for smooth diagonal grabbing)
+                if (topCorner && leftCorner)
+                {
+                    handled = true;
+                    return (IntPtr)HTTOPLEFT;
+                }
+                if (topCorner && rightCorner)
+                {
+                    handled = true;
+                    return (IntPtr)HTTOPRIGHT;
+                }
+                if (bottomCorner && leftCorner)
+                {
+                    handled = true;
+                    return (IntPtr)HTBOTTOMLEFT;
+                }
+                if (bottomCorner && rightCorner)
+                {
+                    handled = true;
+                    return (IntPtr)HTBOTTOMRIGHT;
+                }
+
+                // 2. All 4 Edges
+                if (p.X <= resizeBorder)
+                {
+                    handled = true;
+                    return (IntPtr)HTLEFT;
+                }
+                if (p.X >= w - resizeBorder)
+                {
+                    handled = true;
+                    return (IntPtr)HTRIGHT;
+                }
+                if (p.Y <= resizeBorder)
+                {
+                    handled = true;
+                    return (IntPtr)HTTOP;
+                }
+                if (p.Y >= h - resizeBorder)
+                {
+                    handled = true;
+                    return (IntPtr)HTBOTTOM;
+                }
+            }
+            else if (msg == WM_GETMINMAXINFO)
+            {
+                try
+                {
+                    var info = Marshal.PtrToStructure<Win32.MINMAXINFO>(lParam);
+                    var monitor = DisplayInfo.FromWindow(hwnd);
+                    double scale = monitor.Scale <= 0 ? 1.0 : monitor.Scale;
+                    if (MinWidth > 0) info.ptMinTrackSize.X = (int)(MinWidth * scale);
+                    if (MinHeight > 0) info.ptMinTrackSize.Y = (int)(MinHeight * scale);
+                    Marshal.StructureToPtr(info, lParam, true);
+                    handled = true;
+                }
+                catch { }
             }
 
             return IntPtr.Zero;
@@ -196,8 +309,10 @@ namespace AdvancedSnip
             ImageScrollViewer.HorizontalScrollBarVisibility = zoomed ? System.Windows.Controls.ScrollBarVisibility.Auto : System.Windows.Controls.ScrollBarVisibility.Disabled;
             ImageScrollViewer.VerticalScrollBarVisibility = zoomed ? System.Windows.Controls.ScrollBarVisibility.Auto : System.Windows.Controls.ScrollBarVisibility.Disabled;
 
-            IsTopmost = record.IsTopmost;
-            Topmost = record.IsTopmost;
+            // Restored pins always start with Topmost = false on app restart
+            record.IsTopmost = false;
+            IsTopmost = false;
+            Topmost = false;
             IsDesktopPinned = record.IsDesktopPinned;
             IsFrameless = record.IsDesktopPinned && record.IsFrameless;
 
@@ -207,7 +322,7 @@ namespace AdvancedSnip
 
             WindowPlacement.SetBounds(this, new System.Drawing.Rectangle(
                 (int)record.X, (int)record.Y, (int)record.Width, (int)record.Height),
-                topMost: record.IsTopmost);
+                topMost: false, sendToBottom: true);
         }
 
         private void PositionCenter()
@@ -296,8 +411,19 @@ namespace AdvancedSnip
 
         private void BringToTop()
         {
-            Topmost = true;
-            Topmost = IsTopmost;
+            if (IsTopmost)
+            {
+                Topmost = true;
+            }
+            else
+            {
+                var handle = new WindowInteropHelper(this).Handle;
+                if (handle != IntPtr.Zero)
+                {
+                    Win32.SetWindowPos(handle, Win32.HWND_NOTOPMOST, 0, 0, 0, 0,
+                        Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+                }
+            }
             Activate();
             Focus();
             PinnedWindowManager.CheckOverlaps();
@@ -371,6 +497,12 @@ namespace AdvancedSnip
         {
             IsTopmost = on;
             Topmost = on;
+            var handle = new WindowInteropHelper(this).Handle;
+            if (handle != IntPtr.Zero)
+            {
+                Win32.SetWindowPos(handle, on ? Win32.HWND_TOPMOST : Win32.HWND_NOTOPMOST, 0, 0, 0, 0,
+                    Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+            }
             if (Record != null)
             {
                 Record.IsTopmost = on;

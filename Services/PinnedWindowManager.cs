@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 
 namespace AdvancedSnip.Services
@@ -218,6 +219,9 @@ namespace AdvancedSnip.Services
             {
                 try
                 {
+                    // Restored desktop-pinned images must always have topmost set to false on app restart
+                    record.IsTopmost = false;
+
                     string? loadPath = null;
                     if (!string.IsNullOrEmpty(record.CachedImagePath) && File.Exists(record.CachedImagePath))
                     {
@@ -234,7 +238,25 @@ namespace AdvancedSnip.Services
                     EnsureVisibleOnScreen(record);
 
                     var win = new PinnedClipWindow(image, record.FilePath, record.Caption, record);
+                    win.ShowActivated = false;
                     win.Show();
+
+                    var handle = new WindowInteropHelper(win).Handle;
+                    if (handle != IntPtr.Zero)
+                    {
+                        Win32.SetWindowPos(handle, Win32.HWND_BOTTOM, 0, 0, 0, 0,
+                            Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+                    }
+
+                    win.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(() =>
+                    {
+                        var h = new WindowInteropHelper(win).Handle;
+                        if (h != IntPtr.Zero)
+                        {
+                            Win32.SetWindowPos(h, Win32.HWND_BOTTOM, 0, 0, 0, 0,
+                                Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+                        }
+                    }));
                 }
                 catch
                 {
@@ -243,6 +265,7 @@ namespace AdvancedSnip.Services
             }
 
             CheckOverlaps();
+            SaveAll();
         }
 
         /// <summary>

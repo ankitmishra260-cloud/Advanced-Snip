@@ -46,6 +46,16 @@ namespace AdvancedSnip.Services
             public int nMin, nMax, nPage, nPos, nTrackPos;
         }
 
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct MINMAXINFO
+        {
+            public POINT ptReserved;
+            public POINT ptMaxSize;
+            public POINT ptMaxPosition;
+            public POINT ptMinTrackSize;
+            public POINT ptMaxTrackSize;
+        }
+
         // ── SendInput ────────────────────────────────────────────────────────
         //
         // NOTE: getting these layouts right matters. The union must be 8-byte
@@ -300,7 +310,9 @@ namespace AdvancedSnip.Services
             int x, int y, int cx, int cy, uint flags);
 
         internal static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        internal static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
         internal static readonly IntPtr HWND_TOP = IntPtr.Zero;
+        internal static readonly IntPtr HWND_BOTTOM = new IntPtr(1);
 
         internal const uint SWP_NOSIZE = 0x0001;
         internal const uint SWP_NOMOVE = 0x0002;

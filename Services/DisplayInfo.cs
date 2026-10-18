@@ -147,13 +147,14 @@ namespace AdvancedSnip.Services
                 Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
         }
 
-        internal static void SetBounds(System.Windows.Window w, Rectangle r, bool topMost)
+        internal static void SetBounds(System.Windows.Window w, Rectangle r, bool topMost, bool sendToBottom = false)
         {
             IntPtr h = HandleOf(w);
             if (h == IntPtr.Zero) return;
-            Win32.SetWindowPos(h, topMost ? Win32.HWND_TOPMOST : IntPtr.Zero,
+            IntPtr zOrder = topMost ? Win32.HWND_TOPMOST : (sendToBottom ? Win32.HWND_BOTTOM : Win32.HWND_NOTOPMOST);
+            Win32.SetWindowPos(h, zOrder,
                 r.X, r.Y, r.Width, r.Height,
-                topMost ? 0 : Win32.SWP_NOZORDER);
+                Win32.SWP_NOACTIVATE);
         }
 
         /// <summary>
