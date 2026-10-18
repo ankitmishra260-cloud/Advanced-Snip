@@ -133,16 +133,21 @@ namespace AdvancedSnip
             // to make someone turn the feature off.
             bool launchedByWindows = StartupManager.LaunchedAtStartup(e.Args);
             if (_settings.ShowSettingsOnStartup && !launchedByWindows) ShowGallery();
+
+            // Restore any persistent desktop-pinned images across app and Windows restarts
+            PinnedWindowManager.RestoreAll();
         }
 
         private void ExitApp()
         {
             IsExiting = true;
+            PinnedWindowManager.SaveAll();
             Shutdown();
         }
 
         protected override void OnExit(ExitEventArgs e)
         {
+            PinnedWindowManager.SaveAll();
             try { _recorder?.Stop(); } catch { }
             TearDownRecordingUi();
             _ocr.Stop();

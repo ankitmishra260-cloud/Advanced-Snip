@@ -1738,6 +1738,7 @@ namespace AdvancedSnip
             int n = selected.Count;
             if (n == 0)
             {
+                MenuPin.Visibility = Visibility.Collapsed;
                 MenuEdit.Visibility = Visibility.Collapsed;
                 MenuConvertToPdf.Visibility = Visibility.Collapsed;
                 MenuOpenWith.Visibility = Visibility.Collapsed;
@@ -1748,6 +1749,9 @@ namespace AdvancedSnip
 
             bool isAllImages = selected.All(i => !i.IsVideo && !i.IsPdf);
             bool isAllNonVideos = selected.All(i => !i.IsVideo);
+
+            // Pin to screen: visible when exactly 1 image is selected
+            MenuPin.Visibility = (n == 1 && isAllImages) ? Visibility.Visible : Visibility.Collapsed;
 
             // Edit option: ONLY visible when exactly 1 image is selected (hidden for multi-selection)
             MenuEdit.Visibility = (n == 1 && isAllImages) ? Visibility.Visible : Visibility.Collapsed;
@@ -2094,6 +2098,21 @@ namespace AdvancedSnip
         }
 
         private void GalleryEdit_Click(object sender, RoutedEventArgs e) => OpenSelected();
+
+        private void GalleryPin_Click(object sender, RoutedEventArgs e)
+        {
+            if (GalleryList.SelectedItem is not GalleryItem item || item.IsVideo || item.IsPdf) return;
+
+            try
+            {
+                var bmp = ImageInterop.LoadBitmap(item.FilePath);
+                PinnedClipWindow.ShowForImage(bmp, item.FilePath, item.Name);
+            }
+            catch (Exception ex)
+            {
+                ThemedDialog.Show(this, "Could not pin image: " + ex.Message, "Pin Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
 
         private void GalleryConvertToPdf_Click(object sender, RoutedEventArgs e)
         {

@@ -438,16 +438,45 @@ namespace AdvancedSnip
         {
             if (!_isDraggingShape) return;
 
-            Scribble.ReleaseMouseCapture();
+            // Set dragging to false BEFORE releasing capture so LostMouseCapture handler does not cancel the shape
             _isDraggingShape = false;
+            if (Scribble.IsMouseCaptured)
+            {
+                Scribble.ReleaseMouseCapture();
+            }
 
             var end = e.GetPosition(Scribble);
             double dist = Math.Sqrt(Math.Pow(end.X - _dragStart.X, 2) + Math.Pow(end.Y - _dragStart.Y, 2));
 
-            // If dragged less than 4 pixels, remove as accidental click
-            if (dist < 4.0 && _tempShapeStroke != null)
+            if (dist < 4.0)
             {
-                Scribble.Strokes.Remove(_tempShapeStroke);
+                // Discard accidental jitter/click without dragging
+                if (_tempShapeStroke != null)
+                {
+                    Scribble.Strokes.Remove(_tempShapeStroke);
+                }
+            }
+            else
+            {
+                // Cleanly replace any preview stroke with the final committed stroke
+                if (_tempShapeStroke != null)
+                {
+                    Scribble.Strokes.Remove(_tempShapeStroke);
+                }
+
+                var da = CreateDrawingAttributes();
+                Stroke finalStroke;
+                if (_currentTool == EditTool.Arrow)
+                {
+                    finalStroke = CreateArrowStroke(_dragStart, end, da);
+                }
+                else
+                {
+                    bool forceCircle = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+                    finalStroke = CreateCircleStroke(_dragStart, end, da, forceCircle);
+                }
+
+                Scribble.Strokes.Add(finalStroke);
             }
 
             _tempShapeStroke = null;
@@ -457,14 +486,15 @@ namespace AdvancedSnip
 
         private void Scribble_LostMouseCapture(object sender, MouseEventArgs e)
         {
+            // Only invoked if mouse capture was lost externally (e.g. system window switch) while actively dragging
             if (_isDraggingShape)
             {
+                _isDraggingShape = false;
                 if (_tempShapeStroke != null)
                 {
                     Scribble.Strokes.Remove(_tempShapeStroke);
                     _tempShapeStroke = null;
                 }
-                _isDraggingShape = false;
                 UpdateSaveButtonState();
             }
         }

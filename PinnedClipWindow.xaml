@@ -12,8 +12,12 @@
         WindowStartupLocation="Manual"
         FontFamily="Segoe UI"
         MouseLeftButtonDown="Window_MouseLeftButtonDown"
+        PreviewMouseDoubleClick="Window_PreviewMouseDoubleClick"
         PreviewKeyDown="Window_PreviewKeyDown"
-        PreviewMouseWheel="Window_PreviewMouseWheel">
+        PreviewMouseWheel="Window_PreviewMouseWheel"
+        LocationChanged="Window_LocationChanged"
+        SizeChanged="Window_SizeChanged"
+        StateChanged="Window_StateChanged">
 
     <Window.Resources>
         <Style x:Key="PinnedActionButtonStyle" TargetType="Button">
@@ -62,7 +66,8 @@
                                 BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
                                 Padding="{TemplateBinding Padding}">
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <TextBlock Text="&#x1F4CC;" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="&#xE77A;" FontFamily="Segoe MDL2 Assets" FontSize="11" Margin="0,0,5,0"
+                                           Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center"/>
                                 <TextBlock Text="Unpin" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextHeading}"/>
                             </StackPanel>
                         </Border>
@@ -79,30 +84,79 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="OverlayMiniButtonStyle" TargetType="Button">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Padding" Value="5,3"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" CornerRadius="4" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Brush.Hover}"/>
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.75"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
-    <Border CornerRadius="12"
+    <Border x:Name="WindowBorder" CornerRadius="12"
             Background="{DynamicResource Brush.Card}"
             BorderBrush="{DynamicResource Brush.BorderStrong}"
             BorderThickness="1.5"
             Padding="10,8,10,10">
         <Border.Effect>
-            <DropShadowEffect BlurRadius="26" ShadowDepth="4" Opacity="0.45" Color="Black"/>
+            <DropShadowEffect x:Name="WindowShadow" BlurRadius="26" ShadowDepth="4" Opacity="0.45" Color="Black"/>
         </Border.Effect>
 
         <DockPanel>
-            <!-- Header bar with Pin badge, drag grip, controls, and Unpin button -->
-            <DockPanel DockPanel.Dock="Top" Margin="2,0,2,8" LastChildFill="True">
-                <!-- Left: Pin badge & info -->
+            <!-- Header bar with badges, drag grip, controls, and buttons -->
+            <DockPanel x:Name="HeaderBar" DockPanel.Dock="Top" Margin="2,0,2,8" LastChildFill="True">
+                <!-- Left: Pin badge & Stacking indicator & info -->
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Left">
                     <Border CornerRadius="4" Background="{DynamicResource Brush.AccentSoft}"
-                            Padding="5,1" Margin="0,0,8,0" VerticalAlignment="Center">
+                            BorderBrush="{DynamicResource Brush.Accent}" BorderThickness="1"
+                            Padding="6,2" Margin="0,0,6,0" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#x1F4CC;" FontSize="10.5" VerticalAlignment="Center" Margin="0,0,3,0"/>
+                            <TextBlock Text="&#xE718;" FontFamily="Segoe MDL2 Assets" FontSize="10.5"
+                                       Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center" Margin="0,0,4,0"/>
                             <TextBlock Text="Pinned" FontSize="11" FontWeight="SemiBold"
                                        Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
+
+                    <!-- Stacking Overlap Badge (Visible when overlapping another pin) -->
+                    <Border x:Name="StackBadge" CornerRadius="4"
+                            Background="{DynamicResource Brush.AccentSoft}"
+                            BorderBrush="{DynamicResource Brush.Accent}" BorderThickness="1"
+                            Padding="5,2" Margin="0,0,6,0" VerticalAlignment="Center"
+                            Visibility="Collapsed" Cursor="Hand"
+                            MouseLeftButtonDown="StackBadge_Click"
+                            ToolTip="Overlapping with another pinned image · Click to bring to top">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE81E;" FontFamily="Segoe MDL2 Assets" FontSize="10"
+                                       Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center" Margin="0,0,3,0"/>
+                            <TextBlock x:Name="StackBadgeText" Text="Stacked" FontSize="10.5" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
                     <TextBlock x:Name="DetailText"
                                Text="Screenshot"
                                Foreground="{DynamicResource Brush.TextMuted}"
@@ -118,7 +172,7 @@
                                FontWeight="SemiBold"
                                FontSize="11"
                                VerticalAlignment="Center"
-                               Margin="0,0,8,0"/>
+                               Margin="0,0,6,0"/>
 
                     <Button x:Name="CopyBtn"
                             Style="{StaticResource PinnedActionButtonStyle}"
@@ -126,6 +180,46 @@
                             ToolTip="Copy image to clipboard (Ctrl+C)"
                             Margin="0,0,4,0">
                         <TextBlock Text="Copy" FontSize="11" Foreground="{DynamicResource Brush.TextBody}"/>
+                    </Button>
+
+                    <!-- Desktop Pin Persistence Toggle -->
+                    <Button x:Name="DesktopPinBtn"
+                            Style="{StaticResource PinnedActionButtonStyle}"
+                            Click="DesktopPin_Click"
+                            ToolTip="Pin on Desktop (Persistent across app &amp; Windows restarts) · Click to toggle"
+                            Margin="0,0,4,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="DesktopIcon" Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" FontSize="11" Margin="0,0,4,0"
+                                       Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="DesktopLabel" Text="Pin to Desktop" FontSize="11" Foreground="{DynamicResource Brush.TextHeading}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Title-bar-less / Minimal Mode Toggle (Only visible when IsDesktopPinned == true) -->
+                    <Button x:Name="FramelessBtn"
+                            Style="{StaticResource PinnedActionButtonStyle}"
+                            Click="FramelessToggle_Click"
+                            ToolTip="Minimal Mode · Hide title bar for a clean desktop widget (F)"
+                            Visibility="Collapsed"
+                            Margin="0,0,4,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="FramelessIcon" Text="&#xE740;" FontFamily="Segoe MDL2 Assets" FontSize="11" Margin="0,0,4,0"
+                                       Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="FramelessLabel" Text="Minimal" FontSize="11" Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Always On Top Toggle -->
+                    <Button x:Name="TopmostBtn"
+                            Style="{StaticResource PinnedActionButtonStyle}"
+                            Click="TopmostToggle_Click"
+                            ToolTip="Always on Top (Click to toggle)"
+                            Margin="0,0,4,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="TopmostIcon" Text="&#xE718;" FontFamily="Segoe MDL2 Assets" FontSize="11" Margin="0,0,4,0"
+                                       Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TopmostLabel" Text="Topmost" FontSize="11" Foreground="{DynamicResource Brush.TextHeading}" VerticalAlignment="Center"/>
+                        </StackPanel>
                     </Button>
 
                     <Button x:Name="ZoomResetBtn"
@@ -154,25 +248,124 @@
                            ToolTip="Drag anywhere to reposition"/>
             </DockPanel>
 
-            <!-- Image Viewport -->
-            <Border CornerRadius="6"
-                    ClipToBounds="True"
-                    Background="{DynamicResource Brush.Subtle}"
-                    Cursor="SizeAll">
-                <ScrollViewer x:Name="ImageScrollViewer"
-                              HorizontalScrollBarVisibility="Disabled"
-                              VerticalScrollBarVisibility="Disabled"
-                              Focusable="False">
-                    <Grid x:Name="ImageHost" RenderTransformOrigin="0.5,0.5">
-                        <Grid.LayoutTransform>
-                            <ScaleTransform x:Name="ImageScale" ScaleX="1.0" ScaleY="1.0"/>
-                        </Grid.LayoutTransform>
-                        <Image x:Name="PinnedImage"
-                               Stretch="Uniform"
-                               RenderOptions.BitmapScalingMode="HighQuality"/>
-                    </Grid>
-                </ScrollViewer>
-            </Border>
+            <!-- Image Viewport Area -->
+            <Grid>
+                <!-- Image Viewport Border -->
+                <Border x:Name="ImageBorder"
+                        CornerRadius="6"
+                        ClipToBounds="True"
+                        Background="{DynamicResource Brush.Subtle}"
+                        Cursor="SizeAll">
+                    <Border.ContextMenu>
+                        <ContextMenu x:Name="ImageContextMenu">
+                            <MenuItem x:Name="ContextFrameless" Header="Minimal mode (Frameless)" Click="ContextFrameless_Click">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE740;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem x:Name="ContextDesktop" Header="Pin to Desktop" Click="ContextDesktop_Click">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem x:Name="ContextTopmost" Header="Always on Top" Click="ContextTopmost_Click">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE718;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <Separator/>
+                            <MenuItem Header="Copy image" Click="Copy_Click">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="Reset zoom (100%)" Click="ZoomReset_Click"/>
+                            <Separator/>
+                            <MenuItem Header="Unpin" Click="Unpin_Click">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE77A;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Danger}"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                        </ContextMenu>
+                    </Border.ContextMenu>
+
+                    <ScrollViewer x:Name="ImageScrollViewer"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  VerticalScrollBarVisibility="Disabled"
+                                  Focusable="False">
+                        <Grid x:Name="ImageHost" RenderTransformOrigin="0.5,0.5">
+                            <Grid.LayoutTransform>
+                                <ScaleTransform x:Name="ImageScale" ScaleX="1.0" ScaleY="1.0"/>
+                            </Grid.LayoutTransform>
+                            <Image x:Name="PinnedImage"
+                                   Stretch="Uniform"
+                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                        </Grid>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- Small transparent overlay on top right corner (Active in Minimal / Title-bar-less mode) -->
+                <Border x:Name="FramelessOverlay"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Margin="0,6,6,0"
+                        CornerRadius="6"
+                        Background="#D0121722"
+                        BorderBrush="{DynamicResource Brush.BorderStrong}"
+                        BorderThickness="1"
+                        Padding="3,2"
+                        Opacity="0.45"
+                        Visibility="Collapsed"
+                        MouseEnter="FramelessOverlay_MouseEnter"
+                        MouseLeave="FramelessOverlay_MouseLeave">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.55" Color="Black"/>
+                    </Border.Effect>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- Restore Title Bar Button -->
+                        <Button Style="{StaticResource OverlayMiniButtonStyle}"
+                                Click="ExitFrameless_Click"
+                                ToolTip="Show Title Bar / Full Controls">
+                            <TextBlock Text="&#xE8A7;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                       Foreground="{DynamicResource Brush.Accent}"/>
+                        </Button>
+
+                        <!-- Topmost toggle -->
+                        <Button x:Name="OverlayTopmostBtn"
+                                Style="{StaticResource OverlayMiniButtonStyle}"
+                                Click="TopmostToggle_Click"
+                                ToolTip="Always on Top (Click to toggle)">
+                            <TextBlock x:Name="OverlayTopmostIcon" Text="&#xE718;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                       Foreground="{DynamicResource Brush.Accent}"/>
+                        </Button>
+
+                        <!-- All Options Menu Button -->
+                        <Button x:Name="OverlayMenuBtn"
+                                Style="{StaticResource OverlayMiniButtonStyle}"
+                                Click="OverlayMenu_Click"
+                                ToolTip="All Options · Desktop Pin, Zoom, Copy, Settings">
+                            <TextBlock Text="&#xE712;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                       Foreground="{DynamicResource Brush.TextHeading}"/>
+                        </Button>
+
+                        <!-- Copy button -->
+                        <Button Style="{StaticResource OverlayMiniButtonStyle}"
+                                Click="Copy_Click"
+                                ToolTip="Copy image (Ctrl+C)">
+                            <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                       Foreground="{DynamicResource Brush.TextHeading}"/>
+                        </Button>
+
+                        <!-- Unpin button -->
+                        <Button Style="{StaticResource OverlayMiniButtonStyle}"
+                                Click="Unpin_Click"
+                                ToolTip="Unpin (Esc)">
+                            <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="10.5"
+                                       Foreground="{DynamicResource Brush.Danger}"/>
+                        </Button>
+                    </StackPanel>
+                </Border>
+            </Grid>
         </DockPanel>
     </Border>
 </Window>

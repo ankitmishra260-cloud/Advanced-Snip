@@ -136,14 +136,16 @@
                                                 Background="{DynamicResource Brush.Card}"
                                                 BorderBrush="{DynamicResource Brush.BorderStrong}"
                                                 BorderThickness="1"
-                                                Padding="4,2"
-                                                Opacity="0.85">
-                                            <TextBlock Text="&#x1F4CC;" FontSize="10.5"/>
+                                                Padding="5,3"
+                                                Opacity="0.95">
+                                            <TextBlock x:Name="PinIcon" Text="&#xE718;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                       Foreground="{DynamicResource Brush.Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
                                                 <Setter TargetName="PinBg" Property="Background" Value="{DynamicResource Brush.AccentSoft}"/>
                                                 <Setter TargetName="PinBg" Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+                                                <Setter TargetName="PinIcon" Property="Foreground" Value="{DynamicResource Brush.AccentHover}"/>
                                                 <Setter TargetName="PinBg" Property="Opacity" Value="1.0"/>
                                             </Trigger>
                                         </ControlTemplate.Triggers>

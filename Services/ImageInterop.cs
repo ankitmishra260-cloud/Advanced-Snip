@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -26,7 +26,7 @@ namespace AdvancedSnip.Services
     /// appearance — and it also sidesteps the classic screen-capture trap where BitBlt
     /// leaves the alpha byte at zero and a Bgra32 reading renders the whole shot invisible.
     /// </summary>
-    internal static class ImageInterop
+    public static class ImageInterop
     {
         /// <summary>
         /// One locked copy from GDI+ into WIC. The result is frozen and fully independent
@@ -93,6 +93,22 @@ namespace AdvancedSnip.Services
             bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
             ms.Position = 0;
 
+            var img = new BitmapImage();
+            img.BeginInit();
+            img.CacheOption = BitmapCacheOption.OnLoad;
+            img.StreamSource = ms;
+            img.EndInit();
+            img.Freeze();
+            return img;
+        }
+
+        /// <summary>
+        /// Decodes an image file from disk without holding a file lock.
+        /// </summary>
+        public static BitmapSource LoadBitmap(string path)
+        {
+            byte[] bytes = File.ReadAllBytes(path);
+            using var ms = new MemoryStream(bytes);
             var img = new BitmapImage();
             img.BeginInit();
             img.CacheOption = BitmapCacheOption.OnLoad;

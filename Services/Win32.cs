@@ -269,6 +269,7 @@ namespace AdvancedSnip.Services
         internal const int WS_VSCROLL = 0x00200000;
         internal const int WS_HSCROLL = 0x00100000;
         internal const int WS_THICKFRAME = 0x00040000;
+        internal const int WS_MAXIMIZEBOX = 0x00010000;
         internal const int WS_EX_TOOLWINDOW = 0x00000080;
         internal const int WS_EX_NOACTIVATE = 0x08000000;
         internal const int WS_EX_TRANSPARENT = 0x00000020;
@@ -305,6 +306,7 @@ namespace AdvancedSnip.Services
         internal const uint SWP_NOMOVE = 0x0002;
         internal const uint SWP_NOZORDER = 0x0004;
         internal const uint SWP_NOACTIVATE = 0x0010;
+        internal const uint SWP_FRAMECHANGED = 0x0020;
         internal const uint SWP_SHOWWINDOW = 0x0040;
 
         [DllImport("user32.dll")]

@@ -962,6 +962,13 @@
                             </ListBox.ItemTemplate>
                             <ListBox.ContextMenu>
                                 <ContextMenu>
+                                    <MenuItem x:Name="MenuPin" Header="Pin to screen"
+                                              Click="GalleryPin_Click">
+                                        <MenuItem.Icon>
+                                            <TextBlock Text="&#xE718;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                                       Foreground="{DynamicResource Brush.Accent}"/>
+                                        </MenuItem.Icon>
+                                    </MenuItem>
                                     <MenuItem x:Name="MenuEdit" Header="Edit…"
                                               Click="GalleryEdit_Click"/>
                                     <MenuItem x:Name="MenuConvertToPdf" Header="Convert to PDF…"
