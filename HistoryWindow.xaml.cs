@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -324,10 +324,27 @@ namespace AdvancedSnip
 
         private MonitorEntry PreviewMonitor() => DisplayInfo.FromCursor();
 
+        private void ItemPin_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is FrameworkElement { Tag: ClipItem item })
+            {
+                PinnedClipWindow.ShowForClip(item);
+            }
+        }
+
         private void Thumbs_KeyDown(object sender, KeyEventArgs e)
         {
             switch (e.Key)
             {
+                case Key.P:
+                    e.Handled = true;
+                    if (_history.Current is { } curItem)
+                    {
+                        PinnedClipWindow.ShowForClip(curItem);
+                    }
+                    break;
+
                 case Key.Left:
                     // Move to the previous (older) thumbnail.
                     e.Handled = true;

@@ -186,7 +186,7 @@ namespace AdvancedSnip
             // ScrollViewer: the gallery list now owns its own scrolling, so there is no
             // nested scroller left to swallow the wheel.
 
-            foreach (var box in new[] { SnipHotkeyBox, OcrHotkeyBox, RecordHotkeyBox, ScrollCaptureHotkeyBox, HistoryHotkeyBox, NextHotkeyBox, PrevHotkeyBox })
+            foreach (var box in new[] { SnipHotkeyBox, SnipTimerHotkeyBox, OcrHotkeyBox, RecordHotkeyBox, ScrollCaptureHotkeyBox, HistoryHotkeyBox, NextHotkeyBox, PrevHotkeyBox })
                 box.LostFocus += Hotkey_LostFocus;
 
             // Re-load gallery whenever a new snip is taken while this window is open.
@@ -215,9 +215,10 @@ namespace AdvancedSnip
                 }
             }));
 
-            // The clear button is only meaningful when there is something to clear.
-            _app.HistoryChanged += (_, _) => Dispatcher.BeginInvoke(new Action(UpdateClearButton));
-            IsVisibleChanged += (_, _) => UpdateClearButton();
+            // The history and clear buttons are only meaningful when there is something in history.
+            _app.HistoryChanged += (_, _) => Dispatcher.BeginInvoke(new Action(UpdateClipboardButtonsState));
+            IsVisibleChanged += (_, _) => UpdateClipboardButtonsState();
+            UpdateClipboardButtonsState();
         }
 
         // ─────────────────────────────── title bar ────────────────────────────
@@ -270,7 +271,65 @@ namespace AdvancedSnip
         // helps someone who already knows it, and the window open in front of them is where
         // they will look first.
 
-        private void QuickSnip_Click(object sender, RoutedEventArgs e) => _app.DoSnip();
+        private void QuickSnip_Click(object sender, RoutedEventArgs e)
+        {
+            if (_working.SnipTimerSeconds > 0)
+                _app.DoSnipWithTimer(_working.SnipTimerSeconds);
+            else
+                _app.DoSnip();
+        }
+
+        private void QuickSnipTimer_Click(object sender, RoutedEventArgs e)
+        {
+            if (QuickSnipTimerBtn.ContextMenu != null)
+            {
+                UpdateTimerMenuChecks();
+                QuickSnipTimerBtn.ContextMenu.PlacementTarget = QuickSnipTimerBtn;
+                QuickSnipTimerBtn.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                QuickSnipTimerBtn.ContextMenu.IsOpen = true;
+            }
+        }
+
+        private void SnipTimerPreset_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem mi && int.TryParse(mi.Tag?.ToString(), out int seconds))
+            {
+                SetSnipTimerSeconds(seconds);
+            }
+        }
+
+        private void SnipTimerNow_Click(object sender, RoutedEventArgs e)
+        {
+            int s = _working.SnipTimerSeconds > 0 ? _working.SnipTimerSeconds : 3;
+            _app.DoSnipWithTimer(s);
+        }
+
+        private void SetSnipTimerSeconds(int seconds)
+        {
+            _working.SnipTimerSeconds = seconds;
+            _app.Settings.SnipTimerSeconds = seconds;
+            _app.Settings.Save();
+            UpdateSnipTimerUi();
+        }
+
+        private void UpdateSnipTimerUi()
+        {
+            int s = _working.SnipTimerSeconds;
+            QuickSnipTimerText.Text = s == 0 ? "Off" : $"{s}s";
+            QuickSnipBtn.ToolTip = s == 0
+                ? "Capture a region of the screen (Ctrl+Shift+S)"
+                : $"Capture a region of the screen after {s}s (Ctrl+Shift+S)";
+            UpdateTimerMenuChecks();
+        }
+
+        private void UpdateTimerMenuChecks()
+        {
+            int s = _working.SnipTimerSeconds;
+            if (SnipTimerNone != null) SnipTimerNone.IsChecked = s == 0;
+            if (SnipTimer3s != null) SnipTimer3s.IsChecked = s == 3;
+            if (SnipTimer10s != null) SnipTimer10s.IsChecked = s == 10;
+            if (SnipTimer20s != null) SnipTimer20s.IsChecked = s == 20;
+        }
 
         private void QuickScroll_Click(object sender, RoutedEventArgs e) => _app.DoScrollCapture();
 
@@ -302,7 +361,11 @@ namespace AdvancedSnip
             if (maxH > 200 && Height > maxH) Height = Math.Max(MinHeight, maxH);
         }
 
-        private void QuickHistory_Click(object sender, RoutedEventArgs e) => _app.ToggleHistory();
+        private void QuickHistory_Click(object sender, RoutedEventArgs e)
+        {
+            if (_app.HistoryCount == 0) return;
+            _app.ToggleHistory();
+        }
 
         /// <summary>
         /// Empties the clipboard history and the Windows clipboard.
@@ -331,8 +394,12 @@ namespace AdvancedSnip
             GalleryStatus.Text = $"Cleared {held} item(s) from the clipboard.";
         }
 
-        private void UpdateClearButton()
-            => QuickClearClipBtn.IsEnabled = _app.HistoryCount > 0;
+        private void UpdateClipboardButtonsState()
+        {
+            bool hasItems = _app.HistoryCount > 0;
+            QuickClearClipBtn.IsEnabled = hasItems;
+            QuickHistoryBtn.IsEnabled = hasItems;
+        }
 
         /// <summary>
         /// Puts every selected image into the clipboard history.
@@ -672,9 +739,11 @@ namespace AdvancedSnip
                 _from = null;
                 _to = null;
 
+                ApplyTimerToSnipHotkeyChk.IsChecked = working.ApplyTimerToSnipHotkey;
                 SelectFormat(working.ImageFormat);
                 UpdateJpegRowVisibility();
                 PopulateHotkeyTexts();
+                UpdateSnipTimerUi();
                 RefreshStartupStatus();
                 StatusText.Text = "";
             }
@@ -1091,6 +1160,7 @@ namespace AdvancedSnip
         private void PopulateHotkeyTexts()
         {
             SnipHotkeyBox.Text          = _working.SnipHotkey.ToString();
+            SnipTimerHotkeyBox.Text     = _working.SnipTimerHotkey.ToString();
             OcrHotkeyBox.Text           = _working.OcrHotkey.ToString();
             RecordHotkeyBox.Text        = _working.RecordHotkey.ToString();
             ScrollCaptureHotkeyBox.Text = _working.ScrollCaptureHotkey.ToString();
@@ -2200,6 +2270,7 @@ namespace AdvancedSnip
         private HotkeyDef DefForTag(string? tag) => tag switch
         {
             "Snip"          => _working.SnipHotkey,
+            "SnipTimer"     => _working.SnipTimerHotkey,
             "Ocr"           => _working.OcrHotkey,
             "Record"        => _working.RecordHotkey,
             "ScrollCapture" => _working.ScrollCaptureHotkey,
@@ -2278,6 +2349,7 @@ namespace AdvancedSnip
             _working.EditOnNotificationClick = EditOnClickChk.IsChecked == true;
             _working.GalleryOcrSearch      = OcrSearchChk.IsChecked == true;
             _working.GallerySort           = (GallerySortCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "NewestFirst";
+            _working.ApplyTimerToSnipHotkey = ApplyTimerToSnipHotkeyChk.IsChecked == true;
 
             var failed = _app.UpdateSettings(_working);
             _working = _app.Settings.Clone();

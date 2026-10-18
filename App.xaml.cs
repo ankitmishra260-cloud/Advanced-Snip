@@ -33,6 +33,8 @@ namespace AdvancedSnip
         private string? _lastPath;
         private bool           _snipping;
         private bool           _scrollCapturing;
+        private CancellationTokenSource? _timerSnipCts;
+        private SnipCountdownOverlay?    _timerCountdownOverlay;
 
         // ── recording ──
         private ScreenRecorder?          _recorder;
@@ -146,6 +148,8 @@ namespace AdvancedSnip
             _ocr.Stop();
             _ocr.Save();
             ThemeManager.Shutdown();
+            try { _timerSnipCts?.Cancel(); } catch { }
+            try { _timerCountdownOverlay?.Close(); } catch { }
             _hotkeys?.Dispose();
             _tray?.Dispose();
             _mutex?.Dispose();
@@ -160,6 +164,8 @@ namespace AdvancedSnip
             var failed = new List<string>();
             if (!_hotkeys.TryRegister(_settings.SnipHotkey,          DoSnip))
                 failed.Add($"Snip ({_settings.SnipHotkey})");
+            if (!_hotkeys.TryRegister(_settings.SnipTimerHotkey,     () => DoSnipWithTimer()))
+                failed.Add($"Timed Snip ({_settings.SnipTimerHotkey})");
             if (!_hotkeys.TryRegister(_settings.ScrollCaptureHotkey, DoScrollCapture))
                 failed.Add($"Scroll Capture ({_settings.ScrollCaptureHotkey})");
             if (!_hotkeys.TryRegister(_settings.OcrHotkey,           DoRealtimeOcr))
@@ -179,6 +185,16 @@ namespace AdvancedSnip
 
         public void DoSnip()
         {
+            if (_settings.ApplyTimerToSnipHotkey && _settings.SnipTimerSeconds > 0)
+            {
+                DoSnipWithTimer(_settings.SnipTimerSeconds);
+                return;
+            }
+            DoSnipImmediate();
+        }
+
+        public void DoSnipImmediate()
+        {
             if (_snipping) return;
             _snipping = true;
             try
@@ -195,50 +211,127 @@ namespace AdvancedSnip
                 finally { full.Dispose(); }
 
                 if (!committed || crop == null) return;
-
-                string? savedPath = TrySaveBitmap(crop);
-                var image = ImageInterop.ToFrozenBitmapSourceAuto(crop);
-                crop.Dispose();
-
-                _history.Add(image, savedPath);
-
-                ClipboardOutcome? clip = null;
-                if (_settings.CopyToClipboardOnSnip)
-                    clip = ClipboardService.SetImage(image, savedPath);
-
-                // Remembering the last capture is only there to service a click on the
-                // notification. When it was saved, the file is the better source — the
-                // editor opens from the path — so keeping the pixels too would pin a
-                // full-size image in memory for the rest of the session for nothing.
-                _lastPath  = savedPath;
-                _lastImage = savedPath == null ? image : null;
-
-                if (_settings.ShowTrayNotification)
-                {
-                    string detail = (savedPath != null ? Path.GetFileName(savedPath)
-                                                       : "Added to clipboard history")
-                        + (_settings.EditOnNotificationClick ? " — click to edit" : "");
-
-                    // Folded into this balloon rather than shown as its own. A second
-                    // balloon fired a moment later simply replaces the first, so the
-                    // caveat would flash past and the useful notification would be lost.
-                    if (clip?.Warning is { } warning) detail += "\n" + warning;
-
-                    ShowCaptureToast(
-                        savedPath != null ? "Snip saved" : "Snip captured",
-                        detail, "capture", ImageInterop.MakeThumbnail(image, 128));
-                }
-
-                SnipCompleted?.Invoke(this, EventArgs.Empty);
+                ProcessCapturedCrop(crop);
             }
             finally
             {
                 _snipping = false;
-                // The desktop backdrop, its WIC copy and the overlay's render surface have
-                // all just been released. The user is looking at a notification, not at
-                // us, so this is the cheapest moment there will ever be to compact.
                 MemoryGuard.RequestTrim();
             }
+        }
+
+        public async void DoSnipWithTimer(int seconds = -1)
+        {
+            if (_snipping) return;
+            if (seconds <= 0) seconds = _settings.SnipTimerSeconds;
+            if (seconds <= 0) seconds = 3;
+
+            _timerSnipCts?.Cancel();
+            _timerSnipCts = new CancellationTokenSource();
+            var token = _timerSnipCts.Token;
+
+            _snipping = true;
+            SnipCountdownOverlay? hud = null;
+
+            try
+            {
+                hud = new SnipCountdownOverlay();
+                _timerCountdownOverlay = hud;
+                bool aborted = false;
+
+                hud.SnapNowRequested += () =>
+                {
+                    try { _timerSnipCts?.Cancel(); } catch { }
+                };
+
+                hud.Cancelled += () =>
+                {
+                    aborted = true;
+                    try { _timerSnipCts?.Cancel(); } catch { }
+                };
+
+                hud.Show();
+
+                for (int rem = seconds; rem > 0; rem--)
+                {
+                    hud.UpdateCount(rem);
+                    try
+                    {
+                        await Task.Delay(1000, token);
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        break;
+                    }
+                }
+
+                hud.Close();
+                hud = null;
+                _timerCountdownOverlay = null;
+
+                if (aborted) return;
+
+                // Brief settle delay for Windows DWM compositor to remove the overlay window
+                await Task.Delay(60);
+
+                var full = ScreenCapture.CaptureVirtualScreen(out _, out _);
+                System.Drawing.Bitmap? crop = null;
+                bool committed;
+                try
+                {
+                    var overlay = new SnipOverlay(full, _settings.OverlayOpacity);
+                    committed = overlay.ShowDialog() == true && overlay.ResultBitmap != null;
+                    if (committed) crop = overlay.ResultBitmap;
+                }
+                finally { full.Dispose(); }
+
+                if (!committed || crop == null) return;
+                ProcessCapturedCrop(crop);
+            }
+            catch (Exception ex)
+            {
+                if (_settings.ShowTrayNotification)
+                    _tray.ShowBalloon("Couldn't start timed snip", ex.Message);
+            }
+            finally
+            {
+                try { hud?.Close(); } catch { }
+                _timerCountdownOverlay = null;
+                _timerSnipCts = null;
+                _snipping = false;
+                MemoryGuard.RequestTrim();
+            }
+        }
+
+        private void ProcessCapturedCrop(System.Drawing.Bitmap crop)
+        {
+            string? savedPath = TrySaveBitmap(crop);
+            var image = ImageInterop.ToFrozenBitmapSourceAuto(crop);
+            crop.Dispose();
+
+            _history.Add(image, savedPath);
+
+            ClipboardOutcome? clip = null;
+            if (_settings.CopyToClipboardOnSnip)
+                clip = ClipboardService.SetImage(image, savedPath);
+
+            _lastPath  = savedPath;
+            _lastImage = savedPath == null ? image : null;
+
+            if (_settings.ShowTrayNotification)
+            {
+                string detail = (savedPath != null ? Path.GetFileName(savedPath)
+                                                   : "Added to clipboard history")
+                    + (_settings.EditOnNotificationClick ? " — click to edit" : "");
+
+                if (clip?.Warning is { } warning) detail += "\n" + warning;
+
+                ShowCaptureToast(
+                    savedPath != null ? "Snip saved" : "Snip captured",
+                    detail, "capture", ImageInterop.MakeThumbnail(image, 128));
+            }
+
+            SnipCompleted?.Invoke(this, EventArgs.Empty);
         }
 
         // ─────────────────────────────── real-time OCR ─────────────────────────

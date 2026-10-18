@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:local="clr-namespace:AdvancedSnip"
+        xmlns:vwp="clr-namespace:WpfToolkit.Controls;assembly=VirtualizingWrapPanel"
         Title="Advanced Snip"
         Icon="ASico.ico"
         Width="1280" Height="780"
@@ -455,6 +456,35 @@
                     </StackPanel>
                 </Button>
 
+                <Button x:Name="QuickSnipTimerBtn" DockPanel.Dock="Left" Style="{StaticResource QuickBtn}"
+                        Margin="2,0,0,0" Click="QuickSnipTimer_Click"
+                        Tag="{DynamicResource Brush.Accent}"
+                        ToolTip="Screenshot timer delay (Click to choose preset: No delay, 3s, 10s, 20s)">
+                    <Button.ContextMenu>
+                        <ContextMenu x:Name="SnipTimerContextMenu">
+                            <MenuItem x:Name="SnipTimerNone" Header="No delay (Instant)" Click="SnipTimerPreset_Click" Tag="0"/>
+                            <MenuItem x:Name="SnipTimer3s" Header="3 seconds" Click="SnipTimerPreset_Click" Tag="3"/>
+                            <MenuItem x:Name="SnipTimer10s" Header="10 seconds" Click="SnipTimerPreset_Click" Tag="10"/>
+                            <MenuItem x:Name="SnipTimer20s" Header="20 seconds" Click="SnipTimerPreset_Click" Tag="20"/>
+                            <Separator/>
+                            <MenuItem Header="Snip with timer now" Click="SnipTimerNow_Click">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE722;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE916;" FontFamily="Segoe MDL2 Assets" FontSize="11.5" Margin="0,0,5,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Brush.Accent}"/>
+                        <TextBlock x:Name="QuickSnipTimerText" Text="Off" VerticalAlignment="Center"/>
+                        <TextBlock Text="&#xE96E;" FontFamily="Segoe MDL2 Assets" FontSize="8" Margin="4,2,0,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Brush.TextMuted}"/>
+                    </StackPanel>
+                </Button>
+
                 <Button x:Name="QuickScrollBtn" DockPanel.Dock="Left" Style="{StaticResource QuickBtn}"
                         Click="QuickScroll_Click"
                         Tag="{DynamicResource Brush.Success}"
@@ -492,13 +522,35 @@
 
                 <Button x:Name="QuickHistoryBtn" DockPanel.Dock="Left" Style="{StaticResource QuickBtn}"
                         Click="QuickHistory_Click"
+                        IsEnabled="False"
                         Tag="{DynamicResource Brush.Warning}"
                         ToolTip="Show the clipboard history (Ctrl+Shift+V)">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#x2750;" FontSize="13" Margin="0,0,6,0"
-                                   VerticalAlignment="Center" FontWeight="Bold"
-                                   Foreground="{DynamicResource Brush.Warning}"/>
-                        <TextBlock Text="History" VerticalAlignment="Center"/>
+                                   VerticalAlignment="Center" FontWeight="Bold">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{DynamicResource Brush.Warning}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsEnabled, RelativeSource={RelativeSource AncestorType=Button}}" Value="False">
+                                            <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Text="History" VerticalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{DynamicResource Brush.TextBody}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsEnabled, RelativeSource={RelativeSource AncestorType=Button}}" Value="False">
+                                            <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                     </StackPanel>
                 </Button>
 
@@ -849,7 +901,7 @@
                                  ContextMenuOpening="GalleryContextMenu_Opening">
                             <ListBox.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <local:VirtualizingWrapPanel/>
+                                    <vwp:VirtualizingWrapPanel/>
                                 </ItemsPanelTemplate>
                             </ListBox.ItemsPanel>
                             <ListBox.ItemTemplate>
@@ -1405,22 +1457,28 @@
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="Take a snip"              Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
                                     <TextBox   Grid.Row="0" Grid.Column="1" x:Name="SnipHotkeyBox"          Style="{StaticResource HotkeyBox}" Margin="0,0,0,8" GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="Snip"/>
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Extract text / OCR"       Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
-                                    <TextBox   Grid.Row="1" Grid.Column="1" x:Name="OcrHotkeyBox"           Style="{StaticResource HotkeyBox}" Margin="0,0,0,8" GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="Ocr"/>
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Start / stop recording"   Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
-                                    <TextBox   Grid.Row="2" Grid.Column="1" x:Name="RecordHotkeyBox"        Style="{StaticResource HotkeyBox}" Margin="0,0,0,8" GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="Record"/>
-                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Scroll capture window"    Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
-                                    <TextBox   Grid.Row="3" Grid.Column="1" x:Name="ScrollCaptureHotkeyBox" Style="{StaticResource HotkeyBox}" Margin="0,0,0,8" GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="ScrollCapture"/>
-                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Show clipboard history"   Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
-                                    <TextBox   Grid.Row="4" Grid.Column="1" x:Name="HistoryHotkeyBox"       Style="{StaticResource HotkeyBox}" Margin="0,0,0,8" GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="History"/>
-                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Next image + paste"       Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
-                                    <TextBox   Grid.Row="5" Grid.Column="1" x:Name="NextHotkeyBox"          Style="{StaticResource HotkeyBox}" Margin="0,0,0,8" GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="Next"/>
-                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Previous image + paste"   Style="{StaticResource FieldLabel}"/>
-                                    <TextBox   Grid.Row="6" Grid.Column="1" x:Name="PrevHotkeyBox"          Style="{StaticResource HotkeyBox}"                   GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="Prev"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Take snip with timer"    Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
+                                    <TextBox   Grid.Row="1" Grid.Column="1" x:Name="SnipTimerHotkeyBox"     Style="{StaticResource HotkeyBox}" Margin="0,0,0,8" GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="SnipTimer"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Extract text / OCR"       Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
+                                    <TextBox   Grid.Row="2" Grid.Column="1" x:Name="OcrHotkeyBox"           Style="{StaticResource HotkeyBox}" Margin="0,0,0,8" GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="Ocr"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Start / stop recording"   Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
+                                    <TextBox   Grid.Row="3" Grid.Column="1" x:Name="RecordHotkeyBox"        Style="{StaticResource HotkeyBox}" Margin="0,0,0,8" GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="Record"/>
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Scroll capture window"    Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
+                                    <TextBox   Grid.Row="4" Grid.Column="1" x:Name="ScrollCaptureHotkeyBox" Style="{StaticResource HotkeyBox}" Margin="0,0,0,8" GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="ScrollCapture"/>
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Show clipboard history"   Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
+                                    <TextBox   Grid.Row="5" Grid.Column="1" x:Name="HistoryHotkeyBox"       Style="{StaticResource HotkeyBox}" Margin="0,0,0,8" GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="History"/>
+                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Next image + paste"       Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
+                                    <TextBox   Grid.Row="6" Grid.Column="1" x:Name="NextHotkeyBox"          Style="{StaticResource HotkeyBox}" Margin="0,0,0,8" GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="Next"/>
+                                    <TextBlock Grid.Row="7" Grid.Column="0" Text="Previous image + paste"   Style="{StaticResource FieldLabel}"/>
+                                    <TextBox   Grid.Row="7" Grid.Column="1" x:Name="PrevHotkeyBox"          Style="{StaticResource HotkeyBox}"                   GotFocus="Hotkey_GotFocus" PreviewKeyDown="Hotkey_PreviewKeyDown" Tag="Prev"/>
                                 </Grid>
+
+                                <CheckBox x:Name="ApplyTimerToSnipHotkeyChk" Foreground="{DynamicResource Brush.TextBody}" Margin="0,12,0,0"
+                                          Content="Apply timer preset to main Snip hotkey (Ctrl+Shift+S)"/>
 
                                 <!-- STARTUP -->
                                 </StackPanel>

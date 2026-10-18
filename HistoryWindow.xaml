@@ -41,7 +41,7 @@
                            DockPanel.Dock="Right"
                            HorizontalAlignment="Right"
                            VerticalAlignment="Center"
-                           Text="← → scroll  ·  right-click preview &amp; edit  ·  Enter paste  ·  Esc close"
+                           Text="← → scroll  ·  right-click edit  ·  P pin  ·  Enter paste  ·  Esc close"
                            Foreground="{DynamicResource Brush.TextBody}"
                            FontFamily="Segoe UI"
                            FontSize="11.5" />
@@ -104,21 +104,53 @@
 
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <StackPanel Width="160">
-                            <Border CornerRadius="6" ClipToBounds="True" Background="{DynamicResource Brush.Subtle}">
-                                <Image Source="{Binding Thumb}"
-                                       Height="110"
-                                       Stretch="Uniform"
-                                       RenderOptions.BitmapScalingMode="HighQuality" />
-                            </Border>
-                            <TextBlock Text="{Binding Caption}"
-                                       Foreground="{DynamicResource Brush.TextMuted}"
-                                       FontFamily="Segoe UI"
-                                       FontSize="11"
-                                       FontWeight="Medium"
-                                       HorizontalAlignment="Center"
-                                       Margin="0,6,0,2" />
-                        </StackPanel>
+                        <Grid Width="160">
+                            <StackPanel>
+                                <Border CornerRadius="6" ClipToBounds="True" Background="{DynamicResource Brush.Subtle}">
+                                    <Image Source="{Binding Thumb}"
+                                           Height="110"
+                                           Stretch="Uniform"
+                                           RenderOptions.BitmapScalingMode="HighQuality" />
+                                </Border>
+                                <TextBlock Text="{Binding Caption}"
+                                           Foreground="{DynamicResource Brush.TextMuted}"
+                                           FontFamily="Segoe UI"
+                                           FontSize="11"
+                                           FontWeight="Medium"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,6,0,2" />
+                            </StackPanel>
+
+                            <Button x:Name="ItemPinBtn"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Top"
+                                    Margin="0,4,4,0"
+                                    Focusable="False"
+                                    Cursor="Hand"
+                                    Click="ItemPin_Click"
+                                    ToolTip="Pin to screen always on top (P)"
+                                    Tag="{Binding}">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="PinBg" CornerRadius="4"
+                                                Background="{DynamicResource Brush.Card}"
+                                                BorderBrush="{DynamicResource Brush.BorderStrong}"
+                                                BorderThickness="1"
+                                                Padding="4,2"
+                                                Opacity="0.85">
+                                            <TextBlock Text="&#x1F4CC;" FontSize="10.5"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="PinBg" Property="Background" Value="{DynamicResource Brush.AccentSoft}"/>
+                                                <Setter TargetName="PinBg" Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+                                                <Setter TargetName="PinBg" Property="Opacity" Value="1.0"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>

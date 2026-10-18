@@ -95,4 +95,8 @@
     <Resource Include="ASico.ico" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="VirtualizingWrapPanel" Version="2.5.4" />
+  </ItemGroup>
+
 </Project>

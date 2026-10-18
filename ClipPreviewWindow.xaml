@@ -63,6 +63,38 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="HeaderActionButtonStyle" TargetType="Button">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Background" Value="{DynamicResource Brush.Subtle}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" CornerRadius="5" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Brush.Hover}"/>
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.75"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="CloseButtonStyle" TargetType="Button">
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="Background" Value="Transparent"/>
@@ -88,6 +120,36 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="ToolButtonStyle" TargetType="Button">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Padding" Value="7,3"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" CornerRadius="5" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Brush.Hover}"/>
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.75"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Border CornerRadius="14"
@@ -100,6 +162,7 @@
         </Border.Effect>
 
         <DockPanel>
+            <!-- Top Header -->
             <DockPanel DockPanel.Dock="Top" Margin="2,0,2,10">
                 <TextBlock x:Name="CountText" Text="1 of 1"
                            Foreground="{DynamicResource Brush.Accent}" FontWeight="SemiBold" FontSize="12.5"
@@ -111,17 +174,123 @@
                 <Button x:Name="CloseBtn" DockPanel.Dock="Right"
                         Style="{StaticResource CloseButtonStyle}"
                         Click="Close_Click" ToolTip="Close (Esc)"/>
+
+                <Button x:Name="PinBtn" DockPanel.Dock="Right"
+                        Style="{StaticResource HeaderActionButtonStyle}"
+                        Margin="0,0,6,0"
+                        Click="Pin_Click" ToolTip="Pin screenshot to screen always on top (P)">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x1F4CC;" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Pin" FontSize="11.5" Foreground="{DynamicResource Brush.TextHeading}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
                 <Button x:Name="SaveBtn" DockPanel.Dock="Right"
                         Style="{StaticResource SaveButtonStyle}"
-                        Margin="0,0,8,0"
+                        Margin="0,0,6,0"
                         Visibility="Collapsed" IsEnabled="False"
                         Click="Save_Click" ToolTip="Save image with drawings permanently (S)"/>
+
+                <Button x:Name="DrawBtn" DockPanel.Dock="Right"
+                        Style="{StaticResource HeaderActionButtonStyle}"
+                        Margin="0,0,6,0"
+                        Click="DrawToggle_Click" ToolTip="Toggle annotation tools (D)">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x270F;&#xFE0F;" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="DrawBtnText" Text="Annotate" FontSize="11.5" Foreground="{DynamicResource Brush.TextHeading}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
                 <TextBlock x:Name="HintText" DockPanel.Dock="Right"
                            HorizontalAlignment="Right" VerticalAlignment="Center"
-                           Text="&#8592; &#8594; scroll  ·  D draw  ·  Ctrl+wheel zoom  ·  Enter paste  ·  Esc back"
-                           Foreground="{DynamicResource Brush.TextBody}" FontSize="11.5" Margin="12,0,6,0"/>
+                           Text="&#8592; &#8594; scroll  ·  D draw  ·  P pin  ·  Ctrl+wheel zoom  ·  Enter paste  ·  Esc back"
+                           Foreground="{DynamicResource Brush.TextBody}" FontSize="11.5" Margin="12,0,8,0"/>
             </DockPanel>
 
+            <!-- Annotation Toolbar Strip (Shown during Edit/Draw mode) -->
+            <Border x:Name="ToolBarStrip" DockPanel.Dock="Top"
+                    Visibility="Collapsed"
+                    Background="{DynamicResource Brush.Subtle}"
+                    BorderBrush="{DynamicResource Brush.Border}"
+                    BorderThickness="1"
+                    CornerRadius="7"
+                    Padding="6,4"
+                    Margin="0,0,0,10">
+                <DockPanel LastChildFill="True">
+                    <!-- Left Tools -->
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                        <Button x:Name="ToolPenBtn" Click="ToolPen_Click" Style="{StaticResource ToolButtonStyle}" ToolTip="Freehand Pen (P or 1)">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x270F;&#xFE0F;" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Pen" FontSize="11" Foreground="{DynamicResource Brush.TextBody}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button x:Name="ToolArrowBtn" Click="ToolArrow_Click" Style="{StaticResource ToolButtonStyle}" ToolTip="Draw Arrow (A or 2)" Margin="2,0,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x2794;" FontSize="12" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Arrow" FontSize="11" Foreground="{DynamicResource Brush.TextBody}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button x:Name="ToolCircleBtn" Click="ToolCircle_Click" Style="{StaticResource ToolButtonStyle}" ToolTip="Draw Circle / Ellipse (C or 3) · Shift for circle" Margin="2,0,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x25EF;" FontSize="12" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Circle" FontSize="11" Foreground="{DynamicResource Brush.TextBody}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button x:Name="ToolEraserBtn" Click="ToolEraser_Click" Style="{StaticResource ToolButtonStyle}" ToolTip="Eraser (E or 4) · Click stroke to erase" Margin="2,0,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x232B;" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Erase" FontSize="11" Foreground="{DynamicResource Brush.TextBody}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Border Width="1" Height="16" Background="{DynamicResource Brush.Border}" Margin="6,0"/>
+
+                        <Button x:Name="ToolUndoBtn" Click="ToolUndo_Click" Style="{StaticResource ToolButtonStyle}" ToolTip="Undo last stroke (Ctrl+Z)">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x21A9;" FontSize="12" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Undo" FontSize="11" Foreground="{DynamicResource Brush.TextBody}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button x:Name="ToolClearBtn" Click="ToolClear_Click" Style="{StaticResource ToolButtonStyle}" ToolTip="Clear all annotations" Margin="2,0,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x1F5D1;" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Clear" FontSize="11" Foreground="{DynamicResource Brush.TextBody}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- Right Color Swatches -->
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <TextBlock Text="Color:" FontSize="11" Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+
+                        <Button x:Name="ColorRedBtn" Click="Color_Click" Tag="#EF4444" ToolTip="Red" Style="{StaticResource ToolButtonStyle}" Padding="3,2">
+                            <Border x:Name="ColorRedIndicator" Width="14" Height="14" CornerRadius="7" Background="#EF4444" BorderThickness="1.5" BorderBrush="White"/>
+                        </Button>
+                        <Button x:Name="ColorOrangeBtn" Click="Color_Click" Tag="#F97316" ToolTip="Orange" Style="{StaticResource ToolButtonStyle}" Padding="3,2">
+                            <Border x:Name="ColorOrangeIndicator" Width="14" Height="14" CornerRadius="7" Background="#F97316" BorderThickness="1.5" BorderBrush="Transparent"/>
+                        </Button>
+                        <Button x:Name="ColorYellowBtn" Click="Color_Click" Tag="#EAB308" ToolTip="Yellow" Style="{StaticResource ToolButtonStyle}" Padding="3,2">
+                            <Border x:Name="ColorYellowIndicator" Width="14" Height="14" CornerRadius="7" Background="#EAB308" BorderThickness="1.5" BorderBrush="Transparent"/>
+                        </Button>
+                        <Button x:Name="ColorGreenBtn" Click="Color_Click" Tag="#10B981" ToolTip="Green" Style="{StaticResource ToolButtonStyle}" Padding="3,2">
+                            <Border x:Name="ColorGreenIndicator" Width="14" Height="14" CornerRadius="7" Background="#10B981" BorderThickness="1.5" BorderBrush="Transparent"/>
+                        </Button>
+                        <Button x:Name="ColorBlueBtn" Click="Color_Click" Tag="#3B82F6" ToolTip="Blue" Style="{StaticResource ToolButtonStyle}" Padding="3,2">
+                            <Border x:Name="ColorBlueIndicator" Width="14" Height="14" CornerRadius="7" Background="#3B82F6" BorderThickness="1.5" BorderBrush="Transparent"/>
+                        </Button>
+                        <Button x:Name="ColorWhiteBtn" Click="Color_Click" Tag="#FFFFFF" ToolTip="White" Style="{StaticResource ToolButtonStyle}" Padding="3,2">
+                            <Border x:Name="ColorWhiteIndicator" Width="14" Height="14" CornerRadius="7" Background="#FFFFFF" BorderThickness="1.5" BorderBrush="Transparent"/>
+                        </Button>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- Image Viewport & Canvas -->
             <Border CornerRadius="6" ClipToBounds="True" Background="{DynamicResource Brush.Subtle}">
                 <ScrollViewer x:Name="ImageScrollViewer"
                               HorizontalScrollBarVisibility="Disabled"
@@ -138,7 +307,11 @@
                         <InkCanvas x:Name="Scribble"
                                    Background="Transparent"
                                    EditingMode="None"
-                                   Visibility="Collapsed"/>
+                                   Visibility="Collapsed"
+                                   MouseLeftButtonDown="Scribble_MouseLeftButtonDown"
+                                   MouseMove="Scribble_MouseMove"
+                                   MouseLeftButtonUp="Scribble_MouseLeftButtonUp"
+                                   LostMouseCapture="Scribble_LostMouseCapture"/>
                     </Grid>
                 </ScrollViewer>
             </Border>

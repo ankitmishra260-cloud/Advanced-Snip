@@ -190,6 +190,22 @@ namespace AdvancedSnip.Services
             }
         }
 
+        /// <summary>Places a window near the top-centre of the given monitor's work area.</summary>
+        internal static void TopCenterOn(System.Windows.Window w, MonitorEntry mon, int marginPx = 24)
+        {
+            for (int pass = 0; pass < 2; pass++)
+            {
+                var size = GetPhysicalRect(w);
+                if (size.Width <= 0) return;
+                int scaledMargin = (int)Math.Round(marginPx * mon.Scale);
+                int x = mon.WorkArea.X + (mon.WorkArea.Width - size.Width) / 2;
+                int y = mon.WorkArea.Y + scaledMargin;
+                x = Math.Max(mon.WorkArea.X, x);
+                y = Math.Max(mon.WorkArea.Y, y);
+                MoveTo(w, x, y);
+            }
+        }
+
         /// <summary>
         /// Parks a window on the same monitor as <paramref name="avoid"/> —
         /// selecting the corner with the most clearance (least overlap).

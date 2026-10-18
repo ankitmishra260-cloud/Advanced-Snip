@@ -61,6 +61,10 @@ namespace AdvancedSnip.Services
         public string ImageFormat  { get; set; } = "PNG";   // "PNG" or "JPEG"
         public int    JpegQuality  { get; set; } = 90;      // 1-100, only used when JPEG
         public string FilenamePrefix { get; set; } = "Snip";
+        /// <summary>Seconds of delay before capturing a screenshot. 0 disables the timer (instant capture).</summary>
+        public int    SnipTimerSeconds { get; set; } = 0;
+        /// <summary>When true, the primary Snip hotkey also respects SnipTimerSeconds delay.</summary>
+        public bool   ApplyTimerToSnipHotkey { get; set; } = false;
 
         // ---- clipboard / history ----
         public int  MaxHistory            { get; set; } = 8;
@@ -165,6 +169,7 @@ namespace AdvancedSnip.Services
 
         // ---- hotkeys ----
         public HotkeyDef SnipHotkey          { get; set; } = new(ModifierKeys.Control | ModifierKeys.Shift, Key.S);
+        public HotkeyDef SnipTimerHotkey     { get; set; } = new(ModifierKeys.Control | ModifierKeys.Shift, Key.T);
         public HotkeyDef ScrollCaptureHotkey { get; set; } = new(ModifierKeys.Control | ModifierKeys.Shift, Key.W);
         public HotkeyDef OcrHotkey           { get; set; } = new(ModifierKeys.Control | ModifierKeys.Shift, Key.O);
         public HotkeyDef HistoryHotkey       { get; set; } = new(ModifierKeys.Control | ModifierKeys.Shift, Key.V);
@@ -243,8 +248,12 @@ namespace AdvancedSnip.Services
             RunAtStartup          = RunAtStartup,
             ShowSettingsOnStartup = ShowSettingsOnStartup,
             MinimiseToTrayOnClose = MinimiseToTrayOnClose,
+            SnipTimerSeconds      = SnipTimerSeconds,
+            ApplyTimerToSnipHotkey = ApplyTimerToSnipHotkey,
             SnipHotkey          = new HotkeyDef { Modifiers = SnipHotkey.Modifiers,          Key = SnipHotkey.Key          },
+            SnipTimerHotkey     = new HotkeyDef { Modifiers = SnipTimerHotkey.Modifiers,     Key = SnipTimerHotkey.Key     },
             ScrollCaptureHotkey = new HotkeyDef { Modifiers = ScrollCaptureHotkey.Modifiers, Key = ScrollCaptureHotkey.Key },
+            OcrHotkey           = new HotkeyDef { Modifiers = OcrHotkey.Modifiers,           Key = OcrHotkey.Key           },
             HistoryHotkey       = new HotkeyDef { Modifiers = HistoryHotkey.Modifiers,       Key = HistoryHotkey.Key       },
             NextHotkey          = new HotkeyDef { Modifiers = NextHotkey.Modifiers,          Key = NextHotkey.Key          },
             PrevHotkey          = new HotkeyDef { Modifiers = PrevHotkey.Modifiers,          Key = PrevHotkey.Key          },
@@ -304,11 +313,15 @@ namespace AdvancedSnip.Services
             if (string.IsNullOrWhiteSpace(ScrollSpeed) ||
                 (ScrollSpeed != "Fast" && ScrollSpeed != "Balanced" && ScrollSpeed != "Thorough"))
                 ScrollSpeed = "Balanced";
+            if (SnipTimerSeconds < 0 || SnipTimerSeconds > 60) SnipTimerSeconds = 0;
             SnipHotkey          ??= new HotkeyDef(ModifierKeys.Control | ModifierKeys.Shift, Key.S);
+            SnipTimerHotkey     ??= new HotkeyDef(ModifierKeys.Control | ModifierKeys.Shift, Key.T);
             ScrollCaptureHotkey ??= new HotkeyDef(ModifierKeys.Control | ModifierKeys.Shift, Key.W);
+            OcrHotkey           ??= new HotkeyDef(ModifierKeys.Control | ModifierKeys.Shift, Key.O);
             HistoryHotkey       ??= new HotkeyDef(ModifierKeys.Control | ModifierKeys.Shift, Key.V);
             NextHotkey          ??= new HotkeyDef(ModifierKeys.Control | ModifierKeys.Shift, Key.OemPeriod);
             PrevHotkey          ??= new HotkeyDef(ModifierKeys.Control | ModifierKeys.Shift, Key.OemComma);
+            RecordHotkey        ??= new HotkeyDef(ModifierKeys.Control | ModifierKeys.Shift, Key.R);
         }
     }
 }
