@@ -91,6 +91,9 @@ namespace AdvancedSnip
 
             System.Windows.Forms.Application.EnableVisualStyles();
 
+            // Initialize desktop wallpaper composition and recover from any prior abnormal termination
+            try { DesktopWallpaperHost.Initialize(); } catch { }
+
             _settings = AppSettings.Load();
             EnsureSaveFolder();
 
@@ -157,7 +160,7 @@ namespace AdvancedSnip
             try { _timerCountdownOverlay?.Close(); } catch { }
             _hotkeys?.Dispose();
             _tray?.Dispose();
-            try { DesktopWallpaperHost.UnslapAll(); } catch { }
+            try { DesktopWallpaperHost.Shutdown(); } catch { }
             _mutex?.Dispose();
             base.OnExit(e);
         }
