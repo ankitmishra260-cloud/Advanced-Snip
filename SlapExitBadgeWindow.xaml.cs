@@ -30,24 +30,13 @@ namespace AdvancedSnip
                 ex |= Services.Win32.WS_EX_TOOLWINDOW | Services.Win32.WS_EX_NOACTIVATE;
                 Services.Win32.SetWindowLong(handle, Services.Win32.GWL_EXSTYLE, ex);
 
-                IntPtr shell = Services.Win32.GetDesktopShellWindow();
-                if (shell != IntPtr.Zero)
-                {
-                    Services.Win32.SetWindowLongPtr(handle, Services.Win32.GWLP_HWNDPARENT, shell);
-                    Services.Win32.SetWindowPos(handle, IntPtr.Zero, 0, 0, 0, 0,
-                        Services.Win32.SWP_NOMOVE | Services.Win32.SWP_NOSIZE | Services.Win32.SWP_NOZORDER |
-                        Services.Win32.SWP_NOACTIVATE | Services.Win32.SWP_FRAMECHANGED);
-                }
+                Services.Win32.SetWindowPos(handle, Services.Win32.HWND_BOTTOM, 0, 0, 0, 0,
+                    Services.Win32.SWP_NOMOVE | Services.Win32.SWP_NOSIZE | Services.Win32.SWP_NOACTIVATE);
             }
         }
 
         protected override void OnClosed(EventArgs e)
         {
-            var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-            if (handle != IntPtr.Zero)
-            {
-                try { Services.Win32.SetWindowLongPtr(handle, Services.Win32.GWLP_HWNDPARENT, IntPtr.Zero); } catch { }
-            }
             base.OnClosed(e);
         }
 

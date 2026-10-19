@@ -1274,13 +1274,8 @@ namespace AdvancedSnip
             }
             if (_slapBadge != null)
             {
-                _slapBadge.Close();
+                try { _slapBadge.Close(); } catch { }
                 _slapBadge = null;
-            }
-            var handle = new WindowInteropHelper(this).Handle;
-            if (handle != IntPtr.Zero)
-            {
-                Win32.SetWindowLongPtr(handle, Win32.GWLP_HWNDPARENT, IntPtr.Zero);
             }
             base.OnClosed(e);
         }

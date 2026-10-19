@@ -57,10 +57,19 @@ namespace AdvancedSnip.Services
         private static long _lastOurChangeTimestamp = 0;
 
         private static bool _initialized = false;
+        public static bool IsShuttingDown { get; private set; } = false;
+
+        private static int? _originalAnimationDuration = null;
+        private static bool _originalAnimationDurationCaptured = false;
 
         private static FileSystemWatcher? _fileWatcher = null;
         private static System.Threading.Timer? _heartbeatTimer = null;
         private static WallpaperNotificationWindow? _notificationWindow = null;
+
+        public static void BeginShutdown()
+        {
+            IsShuttingDown = true;
+        }
 
         public static void Log(string msg)
         {
@@ -128,6 +137,12 @@ namespace AdvancedSnip.Services
                 // Optimize wallpaper crossfade animation speed for crisp, snappy responsiveness without stutter
                 try
                 {
+                    if (!_originalAnimationDurationCaptured)
+                    {
+                        using var readKey = Registry.CurrentUser.OpenSubKey(@"Control Panel\Personalization\Desktop Slideshow");
+                        _originalAnimationDuration = readKey?.GetValue("AnimationDuration") as int?;
+                        _originalAnimationDurationCaptured = true;
+                    }
                     using var key = Registry.CurrentUser.CreateSubKey(@"Control Panel\Personalization\Desktop Slideshow");
                     key?.SetValue("AnimationDuration", 150, RegistryValueKind.DWord);
                 }
@@ -142,18 +157,50 @@ namespace AdvancedSnip.Services
                     }
                 }, null, 2500, 2500);
 
+                // Ensure desktop shell icons and clickability are fresh on startup
+                ForceDesktopShellRefresh();
+
                 Log("DesktopWallpaperHost initialized successfully.");
             }
         }
 
-        /// <summary>
-        /// Cleans up monitoring resources and restores the desktop wallpaper.
-        /// </summary>
-        public static void Shutdown()
+        private static void RestoreAnimationDuration()
         {
             try
             {
+                if (!_originalAnimationDurationCaptured) return;
+                using var key = Registry.CurrentUser.CreateSubKey(@"Control Panel\Personalization\Desktop Slideshow");
+                if (key != null)
+                {
+                    if (_originalAnimationDuration.HasValue)
+                    {
+                        key.SetValue("AnimationDuration", _originalAnimationDuration.Value, RegistryValueKind.DWord);
+                    }
+                    else
+                    {
+                        try { key.DeleteValue("AnimationDuration", false); } catch { }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Cleans up monitoring resources, restores genuine wallpaper, and refreshes the desktop shell.
+        /// </summary>
+        public static void Shutdown()
+        {
+            lock (_syncLock)
+            {
+                if (IsShuttingDown && !_initialized) return;
+                IsShuttingDown = true;
+            }
+
+            try
+            {
                 Log("DesktopWallpaperHost shutdown invoked.");
+
+                // 1. Dispose all watchers and timers FIRST so they do not intercept restore broadcasts
                 _heartbeatTimer?.Dispose();
                 _heartbeatTimer = null;
 
@@ -172,7 +219,16 @@ namespace AdvancedSnip.Services
                 }
                 catch { }
 
+                // 2. Restore user's original animation duration registry setting
+                RestoreAnimationDuration();
+
+                // 3. Clear all active slaps and restore original wallpaper
                 UnslapAll();
+
+                // 4. Force desktop shell refresh so icons and right click are 100% active
+                ForceDesktopShellRefresh();
+
+                _initialized = false;
             }
             catch (Exception ex)
             {
@@ -234,7 +290,11 @@ namespace AdvancedSnip.Services
         /// </summary>
         public static bool Unslap(string id, int x = 0, int y = 0, int width = 0, int height = 0)
         {
-            Log($"Unslap requested: id={id}");
+            Log($"Unslap requested: id={id}, isShuttingDown={IsShuttingDown}");
+            Bitmap? toDispose = null;
+            bool shouldUpdate = false;
+            bool shouldRestore = false;
+
             lock (_syncLock)
             {
                 try
@@ -245,17 +305,21 @@ namespace AdvancedSnip.Services
                         return false;
                     }
 
-                    entry.Bitmap.Dispose();
+                    toDispose = entry.Bitmap;
                     _activeSlaps.Remove(id);
 
-                    if (_activeSlaps.Count > 0)
+                    // During shutdown, do NOT recompose intermediate wallpapers.
+                    // Shutdown() will execute a single, clean restore of the genuine wallpaper.
+                    if (!IsShuttingDown)
                     {
-                        return UpdateDesktopWallpaperInternal();
-                    }
-                    else
-                    {
-                        RestoreOriginalWallpaperInternal();
-                        return true;
+                        if (_activeSlaps.Count > 0)
+                        {
+                            shouldUpdate = true;
+                        }
+                        else
+                        {
+                            shouldRestore = true;
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -264,6 +328,20 @@ namespace AdvancedSnip.Services
                     return false;
                 }
             }
+
+            try { toDispose?.Dispose(); } catch { }
+
+            if (shouldUpdate)
+            {
+                return UpdateDesktopWallpaperInternal();
+            }
+            if (shouldRestore)
+            {
+                RestoreOriginalWallpaperInternal();
+                return true;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -283,23 +361,29 @@ namespace AdvancedSnip.Services
         public static void UnslapAll()
         {
             Log("UnslapAll requested");
+            List<Bitmap> toDispose = new();
             lock (_syncLock)
             {
                 try
                 {
                     foreach (var entry in _activeSlaps.Values)
                     {
-                        try { entry.Bitmap.Dispose(); } catch { }
+                        if (entry.Bitmap != null) toDispose.Add(entry.Bitmap);
                     }
                     _activeSlaps.Clear();
-
-                    RestoreOriginalWallpaperInternal();
                 }
                 catch (Exception ex)
                 {
                     Log($"UnslapAll exception: {ex}");
                 }
             }
+
+            foreach (var bmp in toDispose)
+            {
+                try { bmp.Dispose(); } catch { }
+            }
+
+            RestoreOriginalWallpaperInternal();
         }
 
         private static void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
@@ -446,14 +530,36 @@ namespace AdvancedSnip.Services
                 string? restorePath = ResolveGenuineWallpaperPath();
                 Log($"RestoreOriginalWallpaperInternal: Target = {restorePath}");
 
+                string? current = QuerySystemWallpaperDirect();
+                bool isCurrentlySlapped = IsOurSlappedWallpaper(current);
+
+                // If currently set wallpaper is already genuine and no active slaps exist,
+                // skip redundant SPI_SETDESKWALLPAPER to avoid unnecessary Explorer reloads.
+                if (!isCurrentlySlapped && !string.IsNullOrEmpty(restorePath) &&
+                    string.Equals(current, restorePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    Log("Genuine wallpaper is already active. Skipping redundant SPI_SETDESKWALLPAPER.");
+                    CleanupTempFiles();
+                    ForceDesktopShellRefresh();
+                    return;
+                }
+
                 if (!string.IsNullOrEmpty(restorePath) && File.Exists(restorePath))
                 {
                     _isApplyingComposedWallpaper = true;
                     _lastOurChangeTimestamp = Environment.TickCount64;
                     try
                     {
-                        int res = SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, restorePath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-                        Log($"Restored genuine wallpaper: res={res}, path={restorePath}");
+                        // Use a background task with timeout so if any top-level window hangs on broadcast,
+                        // our process and the desktop shell never freeze indefinitely.
+                        var restoreTask = System.Threading.Tasks.Task.Run(() =>
+                        {
+                            return SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, restorePath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+                        });
+
+                        bool completed = restoreTask.Wait(TimeSpan.FromSeconds(3.5));
+                        int res = completed ? restoreTask.Result : 0;
+                        Log($"Restored genuine wallpaper: res={res}, completed={completed}, path={restorePath}");
                     }
                     finally
                     {
@@ -467,10 +573,80 @@ namespace AdvancedSnip.Services
                 }
 
                 CleanupTempFiles();
+                ForceDesktopShellRefresh();
             }
             catch (Exception ex)
             {
                 Log($"RestoreOriginalWallpaperInternal error: {ex}");
+            }
+        }
+
+        /// <summary>
+        /// Forces Windows Explorer to refresh desktop icons, clear stuck WorkerW transition layers,
+        /// and ensure desktop right-click and icon clicking are 100% responsive.
+        /// </summary>
+        public static void ForceDesktopShellRefresh()
+        {
+            try
+            {
+                Log("Executing ForceDesktopShellRefresh...");
+
+                // 1. Notify shell of association/view change to flush caches
+                Win32.SHChangeNotify(Win32.SHCNE_ASSOCCHANGED, Win32.SHCNF_IDLIST, IntPtr.Zero, IntPtr.Zero);
+
+                // 2. Post desktop refresh command (F5 / 28931) to Progman
+                IntPtr progman = Win32.FindWindow("Progman", null);
+                if (progman != IntPtr.Zero)
+                {
+                    Win32.PostMessage(progman, 0x0111 /* WM_COMMAND */, (IntPtr)28931, IntPtr.Zero);
+                }
+
+                // 3. Locate SHELLDLL_DefView (under Progman or WorkerW) and its SysListView32 icons
+                IntPtr shellView = IntPtr.Zero;
+                if (progman != IntPtr.Zero)
+                {
+                    shellView = Win32.FindWindowEx(progman, IntPtr.Zero, "SHELLDLL_DefView", null);
+                }
+
+                if (shellView == IntPtr.Zero)
+                {
+                    Win32.EnumWindows((hWnd, lParam) =>
+                    {
+                        IntPtr sv = Win32.FindWindowEx(hWnd, IntPtr.Zero, "SHELLDLL_DefView", null);
+                        if (sv != IntPtr.Zero)
+                        {
+                            shellView = sv;
+                            return false;
+                        }
+                        return true;
+                    }, IntPtr.Zero);
+                }
+
+                if (shellView != IntPtr.Zero)
+                {
+                    IntPtr listView = Win32.FindWindowEx(shellView, IntPtr.Zero, "SysListView32", null);
+                    if (listView != IntPtr.Zero)
+                    {
+                        Win32.InvalidateRect(listView, IntPtr.Zero, true);
+                        Win32.UpdateWindow(listView);
+                    }
+                    Win32.InvalidateRect(shellView, IntPtr.Zero, true);
+                    Win32.UpdateWindow(shellView);
+                    Win32.PostMessage(shellView, 0x0111 /* WM_COMMAND */, (IntPtr)28931, IntPtr.Zero);
+                }
+
+                // 4. Invalidate desktop root window
+                IntPtr desktop = Win32.GetDesktopWindow();
+                if (desktop != IntPtr.Zero)
+                {
+                    Win32.InvalidateRect(desktop, IntPtr.Zero, true);
+                }
+
+                Log("ForceDesktopShellRefresh completed.");
+            }
+            catch (Exception ex)
+            {
+                Log($"ForceDesktopShellRefresh error: {ex.Message}");
             }
         }
 

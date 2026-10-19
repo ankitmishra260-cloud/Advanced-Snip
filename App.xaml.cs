@@ -86,6 +86,11 @@ namespace AdvancedSnip
         {
             base.OnStartup(e);
 
+            // Register global crash and emergency handlers first thing
+            AppDomain.CurrentDomain.UnhandledException += OnUnhandledDomainCrash;
+            DispatcherUnhandledException += OnDispatcherCrash;
+            TaskScheduler.UnobservedTaskException += OnUnobservedTaskCrash;
+
             _mutex = new Mutex(initiallyOwned: true, MutexName, out bool createdNew);
             if (!createdNew) { Shutdown(); return; }
 
@@ -143,11 +148,56 @@ namespace AdvancedSnip
             PinnedWindowManager.RestoreAll();
         }
 
+        private void OnUnhandledDomainCrash(object sender, UnhandledExceptionEventArgs e)
+        {
+            EmergencyCleanup("AppDomain UnhandledException", e.ExceptionObject as Exception);
+        }
+
+        private void OnDispatcherCrash(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+        {
+            EmergencyCleanup("Dispatcher UnhandledException", e.Exception);
+        }
+
+        private void OnUnobservedTaskCrash(object? sender, UnobservedTaskExceptionEventArgs e)
+        {
+            EmergencyCleanup("TaskScheduler UnobservedTaskException", e.Exception);
+        }
+
+        private void EmergencyCleanup(string source, Exception? ex)
+        {
+            try
+            {
+                DesktopWallpaperHost.Log($"EmergencyCleanup triggered by {source}: {ex?.Message}");
+                DesktopWallpaperHost.BeginShutdown();
+
+                try { PinnedWindowManager.CloseAll(); } catch { }
+
+                try
+                {
+                    var openWindows = new List<Window>();
+                    foreach (Window win in Windows)
+                    {
+                        openWindows.Add(win);
+                    }
+                    foreach (var win in openWindows)
+                    {
+                        try { win.Close(); } catch { }
+                    }
+                }
+                catch { }
+
+                try { DesktopWallpaperHost.Shutdown(); } catch { }
+                try { DesktopWallpaperHost.ForceDesktopShellRefresh(); } catch { }
+            }
+            catch { }
+        }
+
         private void ExitApp()
         {
             if (IsExiting) return;
             IsExiting = true;
 
+            try { DesktopWallpaperHost.BeginShutdown(); } catch { }
             try { _tray?.Dispose(); } catch { }
             try { PinnedWindowManager.SaveAll(); } catch { }
             try { PinnedWindowManager.CloseAll(); } catch { }
@@ -167,6 +217,7 @@ namespace AdvancedSnip
             catch { }
 
             try { DesktopWallpaperHost.Shutdown(); } catch { }
+            try { DesktopWallpaperHost.ForceDesktopShellRefresh(); } catch { }
             try { _recorder?.Stop(); } catch { }
             try { TearDownRecordingUi(); } catch { }
             try { _ocr.Stop(); } catch { }

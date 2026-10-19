@@ -268,6 +268,16 @@ namespace AdvancedSnip.Services
         [DllImport("user32.dll")]
         internal static extern IntPtr GetShellWindow();
 
+        [DllImport("user32.dll")]
+        internal static extern IntPtr GetDesktopWindow();
+
+        [DllImport("shell32.dll")]
+        internal static extern void SHChangeNotify(int wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
+
+        internal const int SHCNE_ASSOCCHANGED = 0x08000000;
+        internal const uint SHCNF_IDLIST = 0x0000;
+        internal const uint SHCNF_FLUSH = 0x1000;
+
         internal static IntPtr GetDesktopShellWindow()
         {
             IntPtr progman = FindWindow("Progman", null);
