@@ -74,3 +74,5 @@ C:\Users\Ankit\Advanced-Snip\obj\Debug\net8.0-windows10.0.19041.0\SnipCountdownO
 C:\Users\Ankit\Advanced-Snip\obj\Debug\net8.0-windows10.0.19041.0\SnipCountdownOverlay.g.cs
 C:\Users\Ankit\Advanced-Snip\obj\Debug\net8.0-windows10.0.19041.0\PinnedClipWindow.baml
 C:\Users\Ankit\Advanced-Snip\obj\Debug\net8.0-windows10.0.19041.0\PinnedClipWindow.g.cs
+C:\Users\Ankit\Advanced-Snip\obj\Debug\net8.0-windows10.0.19041.0\SlapExitBadgeWindow.baml
+C:\Users\Ankit\Advanced-Snip\obj\Debug\net8.0-windows10.0.19041.0\SlapExitBadgeWindow.g.cs

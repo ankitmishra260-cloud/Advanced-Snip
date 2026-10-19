@@ -256,6 +256,27 @@ namespace AdvancedSnip.Services
         [DllImport("user32.dll")]
         internal static extern IntPtr GetParent(IntPtr hwnd);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        internal static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        internal static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        internal static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string? lpszClass, string? lpszWindow);
+
+        [DllImport("user32.dll")]
+        internal static extern IntPtr GetShellWindow();
+
+        internal static IntPtr GetDesktopShellWindow()
+        {
+            IntPtr progman = FindWindow("Progman", null);
+            if (progman != IntPtr.Zero) return progman;
+            IntPtr shell = GetShellWindow();
+            if (shell != IntPtr.Zero) return shell;
+            return IntPtr.Zero;
+        }
+
         [DllImport("user32.dll")]
         internal static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
 
@@ -273,16 +294,58 @@ namespace AdvancedSnip.Services
         [DllImport("user32.dll", SetLastError = true)]
         internal static extern int SetWindowLong(IntPtr hwnd, int nIndex, int value);
 
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr", SetLastError = true)]
+        private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+        [DllImport("user32.dll", EntryPoint = "SetWindowLong", SetLastError = true)]
+        private static extern int SetWindowLong32(IntPtr hWnd, int nIndex, int dwNewLong);
+
+        internal static IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong)
+        {
+            if (IntPtr.Size == 8)
+                return SetWindowLongPtr64(hWnd, nIndex, dwNewLong);
+            else
+                return new IntPtr(SetWindowLong32(hWnd, nIndex, dwNewLong.ToInt32()));
+        }
+
         internal const int GWL_STYLE = -16;
         internal const int GWL_EXSTYLE = -20;
+        internal const int GWLP_HWNDPARENT = -8;
 
         internal const int WS_VSCROLL = 0x00200000;
         internal const int WS_HSCROLL = 0x00100000;
         internal const int WS_THICKFRAME = 0x00040000;
         internal const int WS_MAXIMIZEBOX = 0x00010000;
+        internal const int WS_CHILD = 0x40000000;
+        internal const int WS_VISIBLE = 0x10000000;
+        internal const int WS_CLIPSIBLINGS = 0x04000000;
+        internal const int WS_CLIPCHILDREN = 0x02000000;
         internal const int WS_EX_TOOLWINDOW = 0x00000080;
         internal const int WS_EX_NOACTIVATE = 0x08000000;
         internal const int WS_EX_TRANSPARENT = 0x00000020;
+
+        internal const int WM_WINDOWPOSCHANGING = 0x0046;
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct WINDOWPOS
+        {
+            public IntPtr hwnd;
+            public IntPtr hwndInsertAfter;
+            public int x;
+            public int y;
+            public int cx;
+            public int cy;
+            public uint flags;
+        }
+
+        [DllImport("user32.dll")]
+        internal static extern bool InvalidateRect(IntPtr hWnd, ref RECT lpRect, bool bErase);
+
+        [DllImport("user32.dll")]
+        internal static extern bool InvalidateRect(IntPtr hWnd, IntPtr lpRect, bool bErase);
+
+        [DllImport("user32.dll")]
+        internal static extern bool UpdateWindow(IntPtr hWnd);
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         internal static extern int GetWindowText(IntPtr hwnd, StringBuilder sb, int n);

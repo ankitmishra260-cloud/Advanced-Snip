@@ -1,0 +1,73 @@
+<Window x:Class="AdvancedSnip.SlapExitBadgeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Slap Badge"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="False"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        Width="36"
+        Height="36"
+        Cursor="Hand"
+        ToolTip="Slapped to Desktop (Wallpaper Mode) · Click red dot to restore window"
+        MouseEnter="Window_MouseEnter"
+        MouseLeave="Window_MouseLeave"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown">
+
+    <Grid x:Name="BadgeRoot"
+          HorizontalAlignment="Center"
+          VerticalAlignment="Center"
+          Opacity="0.25"
+          RenderTransformOrigin="0.5,0.5">
+        <Grid.RenderTransform>
+            <ScaleTransform x:Name="BadgeScale" ScaleX="1.0" ScaleY="1.0"/>
+        </Grid.RenderTransform>
+
+        <Grid.ContextMenu>
+            <ContextMenu>
+                <MenuItem Header="Restore Window" Click="Restore_Click">
+                    <MenuItem.Icon>
+                        <TextBlock Text="&#xE8A7;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator/>
+                <MenuItem Header="Unpin" Click="Unpin_Click">
+                    <MenuItem.Icon>
+                        <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Danger}"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+            </ContextMenu>
+        </Grid.ContextMenu>
+
+        <!-- Ambient Glow (expands and intensifies to vibrant red on hover) -->
+        <Ellipse x:Name="GlowEllipse" Width="22" Height="22" Fill="#FF3B30" Opacity="0.12">
+            <Ellipse.Effect>
+                <BlurEffect x:Name="GlowBlur" Radius="6"/>
+            </Ellipse.Effect>
+        </Ellipse>
+
+        <!-- Red Dot Button -->
+        <Border x:Name="DotBorder"
+                Width="16"
+                Height="16"
+                CornerRadius="8"
+                BorderThickness="1.5"
+                BorderBrush="#FFFFFF">
+            <Border.Background>
+                <RadialGradientBrush Center="0.35,0.35" GradientOrigin="0.35,0.35" RadiusX="0.75" RadiusY="0.75">
+                    <GradientStop Color="#FF6B6B" Offset="0.0"/>
+                    <GradientStop Color="#E02424" Offset="0.7"/>
+                    <GradientStop Color="#B91C1C" Offset="1.0"/>
+                </RadialGradientBrush>
+            </Border.Background>
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="6" ShadowDepth="1.0" Opacity="0.45" Color="Black"/>
+            </Border.Effect>
+
+            <!-- Center small white indicator dot -->
+            <Ellipse Width="4" Height="4" Fill="#FFFFFF" Opacity="0.9" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+    </Grid>
+</Window>

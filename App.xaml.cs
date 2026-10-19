@@ -157,6 +157,7 @@ namespace AdvancedSnip
             try { _timerCountdownOverlay?.Close(); } catch { }
             _hotkeys?.Dispose();
             _tray?.Dispose();
+            try { DesktopWallpaperHost.UnslapAll(); } catch { }
             _mutex?.Dispose();
             base.OnExit(e);
         }

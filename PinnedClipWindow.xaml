@@ -181,7 +181,10 @@
                                Text="Screenshot"
                                Foreground="{DynamicResource Brush.TextMuted}"
                                FontSize="11"
-                               VerticalAlignment="Center"/>
+                               VerticalAlignment="Center"
+                               Cursor="Hand"
+                               ToolTip="Click to rename (F2)"
+                               MouseLeftButtonDown="DetailText_Click"/>
                 </StackPanel>
 
                 <!-- Right: Action buttons -->
@@ -289,9 +292,22 @@
                                     <TextBlock Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
                                 </MenuItem.Icon>
                             </MenuItem>
+                            <MenuItem x:Name="ContextSlap" Header="Slap to Desktop (Behind Icons)" Click="ContextSlap_Click">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE72D;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="#FF4D4F"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
                             <MenuItem x:Name="ContextTopmost" Header="Always on Top" Click="ContextTopmost_Click">
                                 <MenuItem.Icon>
                                     <TextBlock Text="&#xE718;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <Separator/>
+
+                            <!-- Rename -->
+                            <MenuItem x:Name="ContextRename" Header="Rename image... (F2)" Click="Rename_Click">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE8AC;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
                                 </MenuItem.Icon>
                             </MenuItem>
                             <Separator/>

@@ -111,6 +111,9 @@
             <TextBlock x:Name="MessageText" TextWrapping="Wrap" FontSize="13"
                        LineHeight="20"
                        Foreground="{DynamicResource Brush.TextBody}"/>
+
+            <TextBox x:Name="InputTextBox" Margin="0,12,0,0" Padding="8,6" FontSize="13"
+                     Visibility="Collapsed"/>
         </DockPanel>
     </Border>
 </Window>

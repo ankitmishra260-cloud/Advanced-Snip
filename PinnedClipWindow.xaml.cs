@@ -208,8 +208,26 @@ namespace AdvancedSnip
                 return IntPtr.Zero;
             }
 
+            if (msg == Win32.WM_WINDOWPOSCHANGING && IsSlappedToDesktop)
+            {
+                try
+                {
+                    var pos = Marshal.PtrToStructure<Win32.WINDOWPOS>(lParam);
+                    pos.hwndInsertAfter = Win32.HWND_BOTTOM;
+                    Marshal.StructureToPtr(pos, lParam, false);
+                }
+                catch { }
+            }
+
             if (msg == WM_NCHITTEST)
             {
+                if (IsSlappedToDesktop)
+                {
+                    const int HTTRANSPARENT = -1;
+                    handled = true;
+                    return (IntPtr)HTTRANSPARENT;
+                }
+
                 if (!IsLoaded || ActualWidth <= 0 || ActualHeight <= 0)
                     return IntPtr.Zero;
 
@@ -352,6 +370,11 @@ namespace AdvancedSnip
             CurrentFlipV = record.FlipVertical;
             UpdateTransforms();
 
+            if (!string.IsNullOrEmpty(record.Caption))
+            {
+                DetailText.Text = record.Caption;
+            }
+
             UpdateTopmostUI();
             UpdateDesktopPinUI();
             UpdateFramelessUI();
@@ -359,6 +382,11 @@ namespace AdvancedSnip
             WindowPlacement.SetBounds(this, new System.Drawing.Rectangle(
                 (int)record.X, (int)record.Y, (int)record.Width, (int)record.Height),
                 topMost: false, sendToBottom: true);
+
+            if (record.IsSlappedToDesktop)
+            {
+                Dispatcher.BeginInvoke(new Action(() => SetSlappedToDesktop(true)), System.Windows.Threading.DispatcherPriority.Loaded);
+            }
         }
 
         private void PositionCenter()
@@ -414,6 +442,7 @@ namespace AdvancedSnip
             Record.RotationAngle = CurrentRotation;
             Record.FlipHorizontal = CurrentFlipH;
             Record.FlipVertical = CurrentFlipV;
+            Record.IsSlappedToDesktop = IsSlappedToDesktop;
 
             PinnedWindowManager.UpdateRecord(Record);
             _saveDebounceTimer.Stop();
@@ -506,6 +535,10 @@ namespace AdvancedSnip
             {
                 UpdateRecordGeometry(rect.X, rect.Y, rect.Width, rect.Height);
             }
+            if (_slapBadge != null)
+            {
+                _slapBadge.UpdatePosition();
+            }
             PinnedWindowManager.CheckOverlaps();
         }
 
@@ -516,6 +549,10 @@ namespace AdvancedSnip
             if (!rect.IsEmpty)
             {
                 UpdateRecordGeometry(rect.X, rect.Y, rect.Width, rect.Height);
+            }
+            if (_slapBadge != null)
+            {
+                _slapBadge.UpdatePosition();
             }
             PinnedWindowManager.CheckOverlaps();
         }
@@ -686,11 +723,13 @@ namespace AdvancedSnip
                 if (HeaderCard != null) HeaderCard.Visibility = Visibility.Collapsed;
                 ImageBorder.CornerRadius = new CornerRadius(10.5);
                 WindowBorder.CornerRadius = new CornerRadius(12);
-                WindowBorder.BorderBrush = (Brush)FindResource("Brush.Accent");
+                WindowBorder.BorderBrush = IsSlappedToDesktop
+                    ? new SolidColorBrush(System.Windows.Media.Color.FromArgb(70, 0, 120, 215))
+                    : (Brush)FindResource("Brush.Accent");
 
                 if (FramelessOverlay != null)
                 {
-                    FramelessOverlay.Visibility = Visibility.Visible;
+                    FramelessOverlay.Visibility = IsSlappedToDesktop ? Visibility.Collapsed : Visibility.Visible;
                     FramelessOverlay.Opacity = Math.Min(CurrentWindowOpacity, 0.45);
                 }
                 if (ContextFrameless != null)
@@ -754,10 +793,213 @@ namespace AdvancedSnip
         private void ContextTopmost_Click(object sender, RoutedEventArgs e)
             => SetTopmost(!IsTopmost);
 
+        private void ContextSlap_Click(object sender, RoutedEventArgs e)
+            => SetSlappedToDesktop(!IsSlappedToDesktop);
+
+        private void DetailText_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            PromptRename();
+        }
+
+        private void Rename_Click(object sender, RoutedEventArgs e)
+        {
+            PromptRename();
+        }
+
+        public void PromptRename()
+        {
+            string current = Record?.Caption ?? DetailText.Text;
+            if (string.Equals(current, "Screenshot", StringComparison.OrdinalIgnoreCase))
+            {
+                current = "";
+            }
+
+            string? newName = ThemedDialog.Prompt(this, "Enter a new name or caption for this pinned image:", "Rename Pinned Image", current);
+            if (!string.IsNullOrWhiteSpace(newName))
+            {
+                DetailText.Text = newName.Trim();
+                if (Record != null)
+                {
+                    Record.Caption = newName.Trim();
+                    PinnedWindowManager.UpdateRecord(Record);
+                    PinnedWindowManager.SaveAll();
+                }
+            }
+        }
+
+        public bool IsSlappedToDesktop { get; private set; }
+        private SlapExitBadgeWindow? _slapBadge;
+        private bool _wasFramelessBeforeSlap;
+        private bool _wasTopmostBeforeSlap;
+
+        public void SetSlappedToDesktop(bool on)
+        {
+            if (IsSlappedToDesktop == on) return;
+            IsSlappedToDesktop = on;
+
+            var currentRect = WindowPlacement.GetPhysicalRect(this);
+            if (currentRect.IsEmpty && Record != null)
+            {
+                currentRect = new System.Drawing.Rectangle((int)Record.X, (int)Record.Y, (int)Record.Width, (int)Record.Height);
+            }
+
+            if (on)
+            {
+                _wasFramelessBeforeSlap = IsFrameless;
+                _wasTopmostBeforeSlap = IsTopmost;
+
+                if (!IsFrameless)
+                {
+                    SetFrameless(true);
+                }
+
+                if (IsTopmost)
+                {
+                    SetTopmost(false);
+                }
+
+                UpdateLayout();
+
+                // Desktop Layer Strategy:
+                // PinnedClipWindow sits directly at HWND_BOTTOM on the desktop:
+                // - Remains 100% visible, sharp, and high-DPI rendered (never hidden!).
+                // - Transparent to mouse clicks (WS_EX_TRANSPARENT + HTTRANSPARENT) so clicks pass to desktop/wallpaper.
+                // - Owned by Progman/Desktop Shell so Win+D ("Show Desktop") does not minimize it.
+                // - Positioned at HWND_BOTTOM so all normal application windows sit on top.
+                Visibility = Visibility.Visible;
+                Show();
+                ApplyDesktopLayerStyles(true, currentRect);
+
+                if (_slapBadge == null)
+                {
+                    _slapBadge = new SlapExitBadgeWindow(this, currentRect);
+                }
+                else
+                {
+                    _slapBadge.UpdatePosition(currentRect);
+                }
+                _slapBadge.Show();
+
+                if (ContextSlap != null) ContextSlap.IsChecked = true;
+            }
+            else
+            {
+                if (_slapBadge != null)
+                {
+                    _slapBadge.Close();
+                    _slapBadge = null;
+                }
+
+                ApplyDesktopLayerStyles(false, currentRect);
+
+                // Restore interactive WPF window
+                Visibility = Visibility.Visible;
+                Show();
+
+                if (!_wasFramelessBeforeSlap)
+                {
+                    SetFrameless(false);
+                }
+
+                if (_wasTopmostBeforeSlap)
+                {
+                    SetTopmost(true);
+                }
+
+                if (ContextSlap != null) ContextSlap.IsChecked = false;
+
+                BringToTop();
+                Activate();
+            }
+
+            if (Record != null)
+            {
+                Record.IsSlappedToDesktop = on;
+                PinnedWindowManager.UpdateRecord(Record);
+                PinnedWindowManager.SaveAll();
+            }
+        }
+
+        private void ApplyDesktopLayerStyles(bool on, System.Drawing.Rectangle currentRect)
+        {
+            var handle = new WindowInteropHelper(this).Handle;
+            if (handle == IntPtr.Zero) return;
+
+            if (on)
+            {
+                if (HeaderCard != null) HeaderCard.Visibility = Visibility.Collapsed;
+                if (FramelessOverlay != null) FramelessOverlay.Visibility = Visibility.Collapsed;
+                ResizeMode = ResizeMode.NoResize;
+
+                if (WindowBorder != null)
+                {
+                    WindowBorder.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 255, 255, 255));
+                    WindowBorder.BorderThickness = new Thickness(1);
+                }
+
+                int ex = Win32.GetWindowLong(handle, Win32.GWL_EXSTYLE);
+                ex |= Win32.WS_EX_TRANSPARENT | Win32.WS_EX_NOACTIVATE | Win32.WS_EX_TOOLWINDOW;
+                Win32.SetWindowLong(handle, Win32.GWL_EXSTYLE, ex);
+
+                IntPtr shell = Win32.GetDesktopShellWindow();
+                if (shell != IntPtr.Zero)
+                {
+                    Win32.SetWindowLongPtr(handle, Win32.GWLP_HWNDPARENT, shell);
+                }
+
+                Win32.SetWindowPos(handle, Win32.HWND_BOTTOM, currentRect.X, currentRect.Y, currentRect.Width, currentRect.Height,
+                    Win32.SWP_NOACTIVATE | Win32.SWP_SHOWWINDOW);
+            }
+            else
+            {
+                int ex = Win32.GetWindowLong(handle, Win32.GWL_EXSTYLE);
+                ex &= ~Win32.WS_EX_TRANSPARENT;
+                ex &= ~Win32.WS_EX_NOACTIVATE;
+                Win32.SetWindowLong(handle, Win32.GWL_EXSTYLE, ex);
+
+                Win32.SetWindowLongPtr(handle, Win32.GWLP_HWNDPARENT, IntPtr.Zero);
+
+                ResizeMode = ResizeMode.CanResize;
+                UpdateFramelessUI();
+
+                Win32.SetWindowPos(handle, Win32.HWND_TOP, 0, 0, 0, 0,
+                    Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_SHOWWINDOW);
+            }
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            if (Record != null)
+            {
+                DesktopWallpaperHost.Unslap(Record.Id.ToString(), 0, 0, 0, 0);
+            }
+            if (_slapBadge != null)
+            {
+                _slapBadge.Close();
+                _slapBadge = null;
+            }
+            var handle = new WindowInteropHelper(this).Handle;
+            if (handle != IntPtr.Zero)
+            {
+                Win32.SetWindowLongPtr(handle, Win32.GWLP_HWNDPARENT, IntPtr.Zero);
+            }
+            base.OnClosed(e);
+        }
+
         // ── Unpin ─────────────────────────────────────────────────────────────
 
         private void Unpin_Click(object sender, RoutedEventArgs e)
         {
+            if (Record != null)
+            {
+                DesktopWallpaperHost.Unslap(Record.Id.ToString(), 0, 0, 0, 0);
+            }
+            if (_slapBadge != null)
+            {
+                _slapBadge.Close();
+                _slapBadge = null;
+            }
             if (Record != null)
             {
                 PinnedWindowManager.RemoveRecord(Record.Id);
@@ -848,6 +1090,20 @@ namespace AdvancedSnip
             {
                 e.Handled = true;
                 SetTopmost(!IsTopmost);
+                return;
+            }
+
+            if (e.Key == Key.F2)
+            {
+                e.Handled = true;
+                PromptRename();
+                return;
+            }
+
+            if (e.Key == Key.S && !Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            {
+                e.Handled = true;
+                SetSlappedToDesktop(!IsSlappedToDesktop);
                 return;
             }
 

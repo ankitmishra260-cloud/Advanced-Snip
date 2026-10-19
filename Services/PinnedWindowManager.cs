@@ -33,6 +33,7 @@ namespace AdvancedSnip.Services
         public int RotationAngle { get; set; } = 0;
         public bool FlipHorizontal { get; set; } = false;
         public bool FlipVertical { get; set; } = false;
+        public bool IsSlappedToDesktop { get; set; } = false;
     }
 
     /// <summary>

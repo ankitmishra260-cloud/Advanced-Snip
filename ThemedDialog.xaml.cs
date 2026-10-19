@@ -64,6 +64,44 @@ namespace AdvancedSnip
         }
 
         /// <summary>
+        /// Shows a themed input prompt dialog, returning the entered text if OK was clicked, or null if cancelled.
+        /// </summary>
+        public static string? Prompt(Window? owner, string prompt, string title, string defaultText = "")
+        {
+            try
+            {
+                var dialog = new ThemedDialog();
+
+                if (owner != null && owner.IsVisible && !ReferenceEquals(owner, dialog))
+                    dialog.Owner = owner;
+                else
+                    dialog.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+
+                dialog.TitleText.Text = title;
+                dialog.MessageText.Text = prompt;
+                dialog.InputTextBox.Text = defaultText;
+                dialog.InputTextBox.Visibility = Visibility.Visible;
+                dialog.ApplyIcon(MessageBoxImage.None);
+                dialog.ApplyButtons(MessageBoxButton.OKCancel);
+
+                ThemeManager.ApplyToWindow(dialog);
+                dialog.Loaded += (s, e) =>
+                {
+                    dialog.InputTextBox.Focus();
+                    dialog.InputTextBox.SelectAll();
+                };
+
+                dialog.ShowDialog();
+
+                return dialog._result == MessageBoxResult.OK ? dialog.InputTextBox.Text.Trim() : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
         /// The severity mark. A glyph tinted from the palette rather than the system icon
         /// set, so it changes with the theme like everything else on the dialog.
         /// </summary>
@@ -164,7 +202,15 @@ namespace AdvancedSnip
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
-            FirstBtn.Focus();
+            if (InputTextBox.Visibility == Visibility.Visible)
+            {
+                InputTextBox.Focus();
+                InputTextBox.SelectAll();
+            }
+            else
+            {
+                FirstBtn.Focus();
+            }
         }
     }
 }
