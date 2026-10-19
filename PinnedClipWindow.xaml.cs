@@ -33,6 +33,13 @@ namespace AdvancedSnip
         public bool IsDesktopPinned { get; private set; } = false;
         public bool IsFrameless { get; private set; } = false;
         public bool IsTopmost { get; private set; } = true;
+        public string CurrentStretchMode { get; private set; } = "Uniform";
+        public double CurrentWindowOpacity { get; private set; } = 1.0;
+        public double CurrentImageOpacity { get; private set; } = 1.0;
+        public double CurrentOpacity => CurrentWindowOpacity;
+        public int CurrentRotation { get; private set; } = 0;
+        public bool CurrentFlipH { get; private set; } = false;
+        public bool CurrentFlipV { get; private set; } = false;
 
         public PinnedClipWindow(BitmapSource image, string? filePath = null, string? caption = null, PinnedItemRecord? existingRecord = null)
         {
@@ -74,6 +81,12 @@ namespace AdvancedSnip
                 IsTopmost = false;
                 Topmost = false;
                 IsFrameless = existingRecord.IsDesktopPinned && existingRecord.IsFrameless;
+                CurrentStretchMode = string.IsNullOrEmpty(existingRecord.StretchMode) ? "Uniform" : existingRecord.StretchMode;
+                CurrentWindowOpacity = existingRecord.WindowOpacity > 0.15 ? existingRecord.WindowOpacity : 1.0;
+                CurrentImageOpacity = existingRecord.ImageOpacity > 0.15 ? existingRecord.ImageOpacity : 1.0;
+                CurrentRotation = existingRecord.RotationAngle;
+                CurrentFlipH = existingRecord.FlipHorizontal;
+                CurrentFlipV = existingRecord.FlipVertical;
             }
             else
             {
@@ -83,7 +96,13 @@ namespace AdvancedSnip
                     Caption = caption,
                     IsTopmost = true,
                     IsDesktopPinned = false,
-                    IsFrameless = false
+                    IsFrameless = false,
+                    StretchMode = "Uniform",
+                    WindowOpacity = 1.0,
+                    ImageOpacity = 1.0,
+                    RotationAngle = 0,
+                    FlipHorizontal = false,
+                    FlipVertical = false
                 };
                 IsTopmost = true;
                 Topmost = true;
@@ -106,6 +125,10 @@ namespace AdvancedSnip
                 UpdateTopmostUI();
                 UpdateDesktopPinUI();
                 UpdateFramelessUI();
+                SetStretchMode(CurrentStretchMode);
+                SetWindowOpacity(CurrentWindowOpacity);
+                SetImageOpacity(CurrentImageOpacity);
+                UpdateTransforms();
             };
 
             Closed += (_, _) =>
@@ -316,6 +339,19 @@ namespace AdvancedSnip
             IsDesktopPinned = record.IsDesktopPinned;
             IsFrameless = record.IsDesktopPinned && record.IsFrameless;
 
+            CurrentStretchMode = string.IsNullOrEmpty(record.StretchMode) ? "Uniform" : record.StretchMode;
+            SetStretchMode(CurrentStretchMode);
+
+            CurrentWindowOpacity = record.WindowOpacity > 0.15 ? record.WindowOpacity : 1.0;
+            CurrentImageOpacity = record.ImageOpacity > 0.15 ? record.ImageOpacity : 1.0;
+            SetWindowOpacity(CurrentWindowOpacity);
+            SetImageOpacity(CurrentImageOpacity);
+
+            CurrentRotation = record.RotationAngle;
+            CurrentFlipH = record.FlipHorizontal;
+            CurrentFlipV = record.FlipVertical;
+            UpdateTransforms();
+
             UpdateTopmostUI();
             UpdateDesktopPinUI();
             UpdateFramelessUI();
@@ -372,6 +408,12 @@ namespace AdvancedSnip
             Record.IsTopmost = IsTopmost;
             Record.IsDesktopPinned = IsDesktopPinned;
             Record.IsFrameless = IsFrameless;
+            Record.StretchMode = CurrentStretchMode;
+            Record.WindowOpacity = CurrentWindowOpacity;
+            Record.ImageOpacity = CurrentImageOpacity;
+            Record.RotationAngle = CurrentRotation;
+            Record.FlipHorizontal = CurrentFlipH;
+            Record.FlipVertical = CurrentFlipV;
 
             PinnedWindowManager.UpdateRecord(Record);
             _saveDebounceTimer.Stop();
@@ -621,8 +663,8 @@ namespace AdvancedSnip
         {
             if (!IsDesktopPinned && on)
             {
-                // Minimal mode only available when pinned to desktop
-                return;
+                // Minimal mode works hand-in-hand with desktop pinning; auto-pin so action takes effect immediately
+                SetDesktopPinned(true);
             }
 
             IsFrameless = on;
@@ -637,19 +679,19 @@ namespace AdvancedSnip
 
         private void UpdateFramelessUI()
         {
-            if (HeaderBar == null || WindowBorder == null) return;
+            if (WindowBorder == null || ImageBorder == null) return;
 
             if (IsFrameless)
             {
-                HeaderBar.Visibility = Visibility.Collapsed;
-                WindowBorder.Padding = new Thickness(2.5);
-                WindowBorder.CornerRadius = new CornerRadius(8);
+                if (HeaderCard != null) HeaderCard.Visibility = Visibility.Collapsed;
+                ImageBorder.CornerRadius = new CornerRadius(10.5);
+                WindowBorder.CornerRadius = new CornerRadius(12);
                 WindowBorder.BorderBrush = (Brush)FindResource("Brush.Accent");
 
                 if (FramelessOverlay != null)
                 {
                     FramelessOverlay.Visibility = Visibility.Visible;
-                    FramelessOverlay.Opacity = 0.45;
+                    FramelessOverlay.Opacity = Math.Min(CurrentWindowOpacity, 0.45);
                 }
                 if (ContextFrameless != null)
                 {
@@ -659,8 +701,8 @@ namespace AdvancedSnip
             }
             else
             {
-                HeaderBar.Visibility = Visibility.Visible;
-                WindowBorder.Padding = new Thickness(10, 8, 10, 10);
+                if (HeaderCard != null) HeaderCard.Visibility = Visibility.Visible;
+                ImageBorder.CornerRadius = new CornerRadius(0, 0, 10.5, 10.5);
                 WindowBorder.CornerRadius = new CornerRadius(12);
                 WindowBorder.BorderBrush = (Brush)FindResource("Brush.BorderStrong");
 
@@ -691,7 +733,7 @@ namespace AdvancedSnip
 
         private void FramelessOverlay_MouseLeave(object sender, MouseEventArgs e)
         {
-            if (FramelessOverlay != null) FramelessOverlay.Opacity = 0.45;
+            if (FramelessOverlay != null) FramelessOverlay.Opacity = Math.Min(CurrentWindowOpacity, 0.45);
         }
 
         private void OverlayMenu_Click(object sender, RoutedEventArgs e)
@@ -738,8 +780,11 @@ namespace AdvancedSnip
         private void SetZoom(double zoom)
         {
             _zoomFactor = Math.Clamp(zoom, 0.25, 4.0);
-            ImageScale.ScaleX = _zoomFactor;
-            ImageScale.ScaleY = _zoomFactor;
+            if (ImageScale != null)
+            {
+                ImageScale.ScaleX = _zoomFactor;
+                ImageScale.ScaleY = _zoomFactor;
+            }
 
             ZoomText.Text = $"{Math.Round(_zoomFactor * 100):0}%";
 
@@ -760,6 +805,23 @@ namespace AdvancedSnip
 
         private void Window_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt))
+            {
+                e.Handled = true;
+                bool adjustImage = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) || Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+                if (adjustImage)
+                {
+                    if (e.Delta > 0) SetImageOpacity(CurrentImageOpacity + 0.05);
+                    else if (e.Delta < 0) SetImageOpacity(CurrentImageOpacity - 0.05);
+                }
+                else
+                {
+                    if (e.Delta > 0) SetWindowOpacity(CurrentWindowOpacity + 0.05);
+                    else if (e.Delta < 0) SetWindowOpacity(CurrentWindowOpacity - 0.05);
+                }
+                return;
+            }
+
             e.Handled = true;
             if (e.Delta > 0)
             {
@@ -806,10 +868,40 @@ namespace AdvancedSnip
                 }
             }
 
+            if (e.Key == Key.OemOpenBrackets) // '['
+            {
+                e.Handled = true;
+                if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+                    SetImageOpacity(CurrentImageOpacity - 0.10);
+                else
+                    SetWindowOpacity(CurrentWindowOpacity - 0.10);
+                return;
+            }
+
+            if (e.Key == Key.OemCloseBrackets) // ']'
+            {
+                e.Handled = true;
+                if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+                    SetImageOpacity(CurrentImageOpacity + 0.10);
+                else
+                    SetWindowOpacity(CurrentWindowOpacity + 0.10);
+                return;
+            }
+
             if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
             {
                 switch (e.Key)
                 {
+                    case Key.R:
+                        e.Handled = true;
+                        RotateImage(90);
+                        return;
+
+                    case Key.H:
+                        e.Handled = true;
+                        ToggleFlipH();
+                        return;
+
                     case Key.F:
                         if (IsDesktopPinned)
                         {
@@ -853,5 +945,271 @@ namespace AdvancedSnip
                 }
             }
         }
+
+        // ── Canvas Fitting & Sizing ──────────────────────────────────────────
+
+        public void SetStretchMode(string mode)
+        {
+            CurrentStretchMode = mode;
+            switch (mode)
+            {
+                case "UniformToFill":
+                    PinnedImage.Stretch = Stretch.UniformToFill;
+                    PinnedImage.HorizontalAlignment = HorizontalAlignment.Center;
+                    PinnedImage.VerticalAlignment = VerticalAlignment.Center;
+                    ImageScrollViewer.HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Disabled;
+                    ImageScrollViewer.VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Disabled;
+                    break;
+                case "Fill":
+                    PinnedImage.Stretch = Stretch.Fill;
+                    PinnedImage.HorizontalAlignment = HorizontalAlignment.Stretch;
+                    PinnedImage.VerticalAlignment = VerticalAlignment.Stretch;
+                    ImageScrollViewer.HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Disabled;
+                    ImageScrollViewer.VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Disabled;
+                    break;
+                case "Actual":
+                    PinnedImage.Stretch = Stretch.None;
+                    PinnedImage.HorizontalAlignment = HorizontalAlignment.Center;
+                    PinnedImage.VerticalAlignment = VerticalAlignment.Center;
+                    ImageScrollViewer.HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto;
+                    ImageScrollViewer.VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto;
+                    break;
+                case "Uniform":
+                default:
+                    CurrentStretchMode = "Uniform";
+                    PinnedImage.Stretch = Stretch.Uniform;
+                    PinnedImage.HorizontalAlignment = HorizontalAlignment.Center;
+                    PinnedImage.VerticalAlignment = VerticalAlignment.Center;
+                    bool scrollNeeded = Math.Abs(_zoomFactor - 1.0) > 0.01;
+                    ImageScrollViewer.HorizontalScrollBarVisibility = scrollNeeded ? System.Windows.Controls.ScrollBarVisibility.Auto : System.Windows.Controls.ScrollBarVisibility.Disabled;
+                    ImageScrollViewer.VerticalScrollBarVisibility = scrollNeeded ? System.Windows.Controls.ScrollBarVisibility.Auto : System.Windows.Controls.ScrollBarVisibility.Disabled;
+                    break;
+            }
+
+            UpdateStretchUI();
+
+            if (Record != null)
+            {
+                Record.StretchMode = CurrentStretchMode;
+                _saveDebounceTimer.Stop();
+                _saveDebounceTimer.Start();
+            }
+        }
+
+        private void UpdateStretchUI()
+        {
+            if (ContextFitUniform != null) ContextFitUniform.IsChecked = CurrentStretchMode == "Uniform";
+            if (ContextFitFillCanvas != null) ContextFitFillCanvas.IsChecked = CurrentStretchMode == "UniformToFill";
+            if (ContextFitStretch != null) ContextFitStretch.IsChecked = CurrentStretchMode == "Fill";
+            if (ContextFitActual != null) ContextFitActual.IsChecked = CurrentStretchMode == "Actual";
+        }
+
+        private void ResetAllOpacity_Click(object sender, RoutedEventArgs e)
+            => ResetAllOpacity();
+
+        private void FitUniform_Click(object sender, RoutedEventArgs e) => SetStretchMode("Uniform");
+        private void FitFillCanvas_Click(object sender, RoutedEventArgs e) => SetStretchMode("UniformToFill");
+        private void FitStretch_Click(object sender, RoutedEventArgs e) => SetStretchMode("Fill");
+        private void FitActual_Click(object sender, RoutedEventArgs e) => SetStretchMode("Actual");
+
+        private void SnapToImage_Click(object sender, RoutedEventArgs e)
+        {
+            SnapWindowToImage();
+        }
+
+        public void SnapWindowToImage()
+        {
+            int imgW = _imageSource.PixelWidth;
+            int imgH = _imageSource.PixelHeight;
+            if (imgW <= 0 || imgH <= 0) return;
+
+            // Swap dimensions if rotated by 90° or 270°
+            if (CurrentRotation == 90 || CurrentRotation == 270)
+            {
+                int temp = imgW;
+                imgW = imgH;
+                imgH = temp;
+            }
+
+            var monitor = DisplayInfo.FromWindow(new WindowInteropHelper(this).Handle);
+            var area = monitor.WorkArea;
+            double scale = monitor.Scale <= 0 ? 1.0 : monitor.Scale;
+
+            // Extra chrome margin based on HeaderBar visibility
+            double chromeW = IsFrameless ? 6 * scale : 24 * scale;
+            double chromeH = IsFrameless ? 6 * scale : 56 * scale;
+
+            double targetW = (imgW * _zoomFactor) + chromeW;
+            double targetH = (imgH * _zoomFactor) + chromeH;
+
+            int maxW = Math.Max(260, area.Width - 40);
+            int maxH = Math.Max(180, area.Height - 40);
+
+            if (targetW > maxW || targetH > maxH)
+            {
+                double shrink = Math.Min((double)maxW / targetW, (double)maxH / targetH);
+                targetW = Math.Max(240, targetW * shrink);
+                targetH = Math.Max(160, targetH * shrink);
+            }
+
+            int w = (int)Math.Round(targetW);
+            int h = (int)Math.Round(targetH);
+
+            var currentRect = WindowPlacement.GetPhysicalRect(this);
+            int x = currentRect.X;
+            int y = currentRect.Y;
+
+            x = Math.Clamp(x, area.X, area.Right - w);
+            y = Math.Clamp(y, area.Y, area.Bottom - h);
+
+            WindowPlacement.SetBounds(this, new System.Drawing.Rectangle(x, y, w, h), topMost: IsTopmost);
+            UpdateRecordGeometry(x, y, w, h);
+            PinnedWindowManager.SaveAll();
+        }
+
+        // ── Window & Image Translucency / Opacity ─────────────────────────────
+
+        public void SetWindowOpacity(double opacity)
+        {
+            CurrentWindowOpacity = Math.Clamp(Math.Round(opacity, 2), 0.20, 1.0);
+            Opacity = 1.0; // Window remains fully visible so image is NOT dimmed or faded
+
+            if (WindowBorder != null)
+            {
+                WindowBorder.Opacity = CurrentWindowOpacity;
+            }
+            if (HeaderCard != null)
+            {
+                HeaderCard.Opacity = CurrentWindowOpacity;
+            }
+            if (FramelessOverlay != null && !FramelessOverlay.IsMouseOver)
+            {
+                FramelessOverlay.Opacity = Math.Min(CurrentWindowOpacity, 0.45);
+            }
+
+            UpdateOpacityUI();
+
+            if (Record != null)
+            {
+                Record.WindowOpacity = CurrentWindowOpacity;
+                _saveDebounceTimer.Stop();
+                _saveDebounceTimer.Start();
+            }
+        }
+
+        public void SetImageOpacity(double opacity)
+        {
+            CurrentImageOpacity = Math.Clamp(Math.Round(opacity, 2), 0.15, 1.0);
+            if (PinnedImage != null)
+            {
+                PinnedImage.Opacity = CurrentImageOpacity;
+            }
+
+            UpdateOpacityUI();
+
+            if (Record != null)
+            {
+                Record.ImageOpacity = CurrentImageOpacity;
+                _saveDebounceTimer.Stop();
+                _saveDebounceTimer.Start();
+            }
+        }
+
+        public void ResetAllOpacity()
+        {
+            SetWindowOpacity(1.0);
+            SetImageOpacity(1.0);
+        }
+
+        private void UpdateOpacityUI()
+        {
+            // Pin Window Transparency items
+            if (ContextWinOpacity100 != null) ContextWinOpacity100.IsChecked = Math.Abs(CurrentWindowOpacity - 1.0) < 0.05;
+            if (ContextWinOpacity85 != null) ContextWinOpacity85.IsChecked = Math.Abs(CurrentWindowOpacity - 0.85) < 0.05;
+            if (ContextWinOpacity70 != null) ContextWinOpacity70.IsChecked = Math.Abs(CurrentWindowOpacity - 0.70) < 0.05;
+            if (ContextWinOpacity50 != null) ContextWinOpacity50.IsChecked = Math.Abs(CurrentWindowOpacity - 0.50) < 0.05;
+            if (ContextWinOpacity30 != null) ContextWinOpacity30.IsChecked = Math.Abs(CurrentWindowOpacity - 0.30) < 0.05;
+
+            // Image Transparency items
+            if (ContextImgOpacity100 != null) ContextImgOpacity100.IsChecked = Math.Abs(CurrentImageOpacity - 1.0) < 0.05;
+            if (ContextImgOpacity85 != null) ContextImgOpacity85.IsChecked = Math.Abs(CurrentImageOpacity - 0.85) < 0.05;
+            if (ContextImgOpacity70 != null) ContextImgOpacity70.IsChecked = Math.Abs(CurrentImageOpacity - 0.70) < 0.05;
+            if (ContextImgOpacity50 != null) ContextImgOpacity50.IsChecked = Math.Abs(CurrentImageOpacity - 0.50) < 0.05;
+            if (ContextImgOpacity30 != null) ContextImgOpacity30.IsChecked = Math.Abs(CurrentImageOpacity - 0.30) < 0.05;
+        }
+
+        private void WinOpacity100_Click(object sender, RoutedEventArgs e) => SetWindowOpacity(1.0);
+        private void WinOpacity85_Click(object sender, RoutedEventArgs e) => SetWindowOpacity(0.85);
+        private void WinOpacity70_Click(object sender, RoutedEventArgs e) => SetWindowOpacity(0.70);
+        private void WinOpacity50_Click(object sender, RoutedEventArgs e) => SetWindowOpacity(0.50);
+        private void WinOpacity30_Click(object sender, RoutedEventArgs e) => SetWindowOpacity(0.30);
+
+        private void ImgOpacity100_Click(object sender, RoutedEventArgs e) => SetImageOpacity(1.0);
+        private void ImgOpacity85_Click(object sender, RoutedEventArgs e) => SetImageOpacity(0.85);
+        private void ImgOpacity70_Click(object sender, RoutedEventArgs e) => SetImageOpacity(0.70);
+        private void ImgOpacity50_Click(object sender, RoutedEventArgs e) => SetImageOpacity(0.50);
+        private void ImgOpacity30_Click(object sender, RoutedEventArgs e) => SetImageOpacity(0.30);
+
+        // ── Rotate & Flip Transformations ─────────────────────────────────────
+
+        public void RotateImage(int deltaAngle)
+        {
+            CurrentRotation = (CurrentRotation + deltaAngle) % 360;
+            if (CurrentRotation < 0) CurrentRotation += 360;
+            UpdateTransforms();
+        }
+
+        public void ToggleFlipH()
+        {
+            CurrentFlipH = !CurrentFlipH;
+            UpdateTransforms();
+        }
+
+        public void ToggleFlipV()
+        {
+            CurrentFlipV = !CurrentFlipV;
+            UpdateTransforms();
+        }
+
+        public void ResetTransforms()
+        {
+            CurrentRotation = 0;
+            CurrentFlipH = false;
+            CurrentFlipV = false;
+            UpdateTransforms();
+        }
+
+        private void UpdateTransforms()
+        {
+            if (ImageRotate != null)
+            {
+                ImageRotate.Angle = CurrentRotation;
+            }
+            if (ImageFlipScale != null)
+            {
+                ImageFlipScale.ScaleX = CurrentFlipH ? -1.0 : 1.0;
+                ImageFlipScale.ScaleY = CurrentFlipV ? -1.0 : 1.0;
+            }
+            if (ImageScale != null)
+            {
+                ImageScale.ScaleX = _zoomFactor;
+                ImageScale.ScaleY = _zoomFactor;
+            }
+
+            if (Record != null)
+            {
+                Record.RotationAngle = CurrentRotation;
+                Record.FlipHorizontal = CurrentFlipH;
+                Record.FlipVertical = CurrentFlipV;
+                _saveDebounceTimer.Stop();
+                _saveDebounceTimer.Start();
+            }
+        }
+
+        private void Rotate90_Click(object sender, RoutedEventArgs e) => RotateImage(90);
+        private void Rotate180_Click(object sender, RoutedEventArgs e) => RotateImage(180);
+        private void FlipH_Click(object sender, RoutedEventArgs e) => ToggleFlipH();
+        private void FlipV_Click(object sender, RoutedEventArgs e) => ToggleFlipV();
+        private void ResetTransform_Click(object sender, RoutedEventArgs e) => ResetTransforms();
     }
 }

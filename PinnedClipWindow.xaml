@@ -119,18 +119,35 @@
         </Style>
     </Window.Resources>
 
-    <Border x:Name="WindowBorder" CornerRadius="12"
-            Background="{DynamicResource Brush.Card}"
-            BorderBrush="{DynamicResource Brush.BorderStrong}"
-            BorderThickness="1.5"
-            Padding="10,8,10,10">
-        <Border.Effect>
-            <DropShadowEffect x:Name="WindowShadow" BlurRadius="26" ShadowDepth="4" Opacity="0.45" Color="Black"/>
-        </Border.Effect>
+    <Grid x:Name="RootWindowGrid" SnapsToDevicePixels="True">
+        <!-- 1. Window Outer Border & Drop Shadow (Spans entire window) -->
+        <Border x:Name="WindowBorder"
+                CornerRadius="12"
+                BorderBrush="{DynamicResource Brush.BorderStrong}"
+                BorderThickness="1.5"
+                Background="Transparent"
+                SnapsToDevicePixels="True">
+            <Border.Effect>
+                <DropShadowEffect x:Name="WindowShadow" BlurRadius="26" ShadowDepth="4" Opacity="0.45" Color="Black"/>
+            </Border.Effect>
+        </Border>
 
-        <DockPanel>
-            <!-- Header bar with badges, drag grip, controls, and buttons -->
-            <DockPanel x:Name="HeaderBar" DockPanel.Dock="Top" Margin="2,0,2,8" LastChildFill="True">
+        <!-- 2. Window Content Grid: Row 0 = Title/HeaderBar (Chrome), Row 1 = Image (Independent) -->
+        <Grid Margin="1.5" SnapsToDevicePixels="True">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Top Header Card (Normal mode, part of window chrome) -->
+            <Border x:Name="HeaderCard"
+                    Grid.Row="0"
+                    CornerRadius="10.5,10.5,0,0"
+                    Background="{DynamicResource Brush.Card}"
+                    BorderBrush="{DynamicResource Brush.Border}"
+                    BorderThickness="0,0,0,1"
+                    Padding="8,5,8,5">
+                <DockPanel x:Name="HeaderBar" LastChildFill="True">
                 <!-- Left: Pin badge & Stacking indicator & info -->
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Left">
                     <Border CornerRadius="4" Background="{DynamicResource Brush.AccentSoft}"
@@ -249,18 +266,19 @@
                            Opacity="0.6"
                            Cursor="SizeAll"
                            ToolTip="Drag anywhere to reposition"/>
-            </DockPanel>
+                </DockPanel>
+            </Border>
 
-            <!-- Image Viewport Area -->
-            <Grid>
-                <!-- Image Viewport Border -->
-                <Border x:Name="ImageBorder"
-                        CornerRadius="6"
-                        ClipToBounds="True"
-                        Background="{DynamicResource Brush.Subtle}"
-                        Cursor="SizeAll">
+            <!-- Image Viewport Area (Independent Layer, Opacity = CurrentImageOpacity) -->
+            <Border x:Name="ImageBorder"
+                    Grid.Row="1"
+                    CornerRadius="0,0,10.5,10.5"
+                    ClipToBounds="True"
+                    Background="Transparent"
+                    Cursor="SizeAll">
                     <Border.ContextMenu>
                         <ContextMenu x:Name="ImageContextMenu">
+                            <!-- Window Modes -->
                             <MenuItem x:Name="ContextFrameless" Header="Minimal mode (Frameless)" Click="ContextFrameless_Click">
                                 <MenuItem.Icon>
                                     <TextBlock Text="&#xE740;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
@@ -277,7 +295,86 @@
                                 </MenuItem.Icon>
                             </MenuItem>
                             <Separator/>
-                            <MenuItem Header="Copy image" Click="Copy_Click">
+
+                            <!-- Canvas & Scaling Options -->
+                            <MenuItem x:Name="ContextCanvasHeader" Header="Canvas &amp; Sizing">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE799;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                </MenuItem.Icon>
+                                <MenuItem x:Name="ContextFitUniform" Header="Fit to Window (Uniform)" Click="FitUniform_Click" IsChecked="True"/>
+                                <MenuItem x:Name="ContextFitFillCanvas" Header="Fill Canvas (Crop to Fill)" Click="FitFillCanvas_Click"/>
+                                <MenuItem x:Name="ContextFitStretch" Header="Stretch to Fill Window" Click="FitStretch_Click"/>
+                                <MenuItem x:Name="ContextFitActual" Header="Actual Size (1:1 / 100%)" Click="FitActual_Click"/>
+                                <Separator/>
+                                <MenuItem x:Name="ContextSnapToImage" Header="Snap Window to Image Bounds" Click="SnapToImage_Click">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE71E;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                            </MenuItem>
+
+                            <!-- Transparency & Opacity (Combined Entry) -->
+                            <MenuItem x:Name="ContextTranslucencyHeader" Header="Transparency">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE790;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                </MenuItem.Icon>
+
+                                <!-- 1. Pin Window Transparency -->
+                                <MenuItem x:Name="ContextWinOpacityHeader" Header="Pin Window Transparency">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                    </MenuItem.Icon>
+                                    <MenuItem x:Name="ContextWinOpacity100" Header="100% – Fully Opaque" Click="WinOpacity100_Click" IsChecked="True"/>
+                                    <MenuItem x:Name="ContextWinOpacity85"  Header="85% – Subtle Glass" Click="WinOpacity85_Click"/>
+                                    <MenuItem x:Name="ContextWinOpacity70"  Header="70% – Translucent" Click="WinOpacity70_Click"/>
+                                    <MenuItem x:Name="ContextWinOpacity50"  Header="50% – See-Through" Click="WinOpacity50_Click"/>
+                                    <MenuItem x:Name="ContextWinOpacity30"  Header="30% – Ghost Trace" Click="WinOpacity30_Click"/>
+                                </MenuItem>
+
+                                <!-- 2. Image Transparency -->
+                                <MenuItem x:Name="ContextImgOpacityHeader" Header="Image Transparency">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xEB9F;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                    </MenuItem.Icon>
+                                    <MenuItem x:Name="ContextImgOpacity100" Header="100% – Fully Opaque" Click="ImgOpacity100_Click" IsChecked="True"/>
+                                    <MenuItem x:Name="ContextImgOpacity85"  Header="85% – Subtle Glass" Click="ImgOpacity85_Click"/>
+                                    <MenuItem x:Name="ContextImgOpacity70"  Header="70% – Translucent" Click="ImgOpacity70_Click"/>
+                                    <MenuItem x:Name="ContextImgOpacity50"  Header="50% – See-Through" Click="ImgOpacity50_Click"/>
+                                    <MenuItem x:Name="ContextImgOpacity30"  Header="30% – Ghost Trace" Click="ImgOpacity30_Click"/>
+                                </MenuItem>
+
+                                <Separator/>
+                                <MenuItem Header="Reset Both to 100%" Click="ResetAllOpacity_Click">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE777;" FontFamily="Segoe MDL2 Assets" FontSize="12"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                            </MenuItem>
+
+                            <!-- Rotate & Flip -->
+                            <MenuItem x:Name="ContextRotateHeader" Header="Rotate &amp; Flip">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE7AD;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                </MenuItem.Icon>
+                                <MenuItem Header="Rotate 90° Clockwise" Click="Rotate90_Click">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE7AD;" FontFamily="Segoe MDL2 Assets" FontSize="12"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Rotate 180°" Click="Rotate180_Click"/>
+                                <Separator/>
+                                <MenuItem Header="Flip Horizontal (Mirror)" Click="FlipH_Click">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE7A9;" FontFamily="Segoe MDL2 Assets" FontSize="12"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Flip Vertical" Click="FlipV_Click"/>
+                                <Separator/>
+                                <MenuItem Header="Reset Orientations" Click="ResetTransform_Click"/>
+                            </MenuItem>
+
+                            <Separator/>
+                            <MenuItem Header="Copy image (Ctrl+C)" Click="Copy_Click">
                                 <MenuItem.Icon>
                                     <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
                                 </MenuItem.Icon>
@@ -286,7 +383,7 @@
                             <Separator/>
                             <MenuItem Header="Unpin" Click="Unpin_Click">
                                 <MenuItem.Icon>
-                                    <TextBlock Text="&#xE77A;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Danger}"/>
+                                    <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Danger}"/>
                                 </MenuItem.Icon>
                             </MenuItem>
                         </ContextMenu>
@@ -296,19 +393,30 @@
                                   HorizontalScrollBarVisibility="Disabled"
                                   VerticalScrollBarVisibility="Disabled"
                                   Focusable="False">
-                        <Grid x:Name="ImageHost" RenderTransformOrigin="0.5,0.5">
+                        <Grid x:Name="ImageHost" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                             <Grid.LayoutTransform>
                                 <ScaleTransform x:Name="ImageScale" ScaleX="1.0" ScaleY="1.0"/>
                             </Grid.LayoutTransform>
                             <Image x:Name="PinnedImage"
                                    Stretch="Uniform"
-                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                                   HorizontalAlignment="Stretch"
+                                   VerticalAlignment="Stretch"
+                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                   RenderTransformOrigin="0.5,0.5">
+                                <Image.RenderTransform>
+                                    <TransformGroup>
+                                        <ScaleTransform x:Name="ImageFlipScale" ScaleX="1.0" ScaleY="1.0"/>
+                                        <RotateTransform x:Name="ImageRotate" Angle="0"/>
+                                    </TransformGroup>
+                                </Image.RenderTransform>
+                            </Image>
                         </Grid>
                     </ScrollViewer>
-                </Border>
+            </Border>
+        </Grid>
 
-                <!-- Small transparent overlay on top right corner (Active in Minimal / Title-bar-less mode) -->
-                <Border x:Name="FramelessOverlay"
+        <!-- Small transparent overlay on top right corner (Active in Minimal / Title-bar-less mode) -->
+        <Border x:Name="FramelessOverlay"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Top"
                         Margin="0,6,6,0"
@@ -367,8 +475,6 @@
                                        Foreground="{DynamicResource Brush.Danger}"/>
                         </Button>
                     </StackPanel>
-                </Border>
-            </Grid>
-        </DockPanel>
-    </Border>
+        </Border>
+    </Grid>
 </Window>

@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using AdvancedSnip.Services;
@@ -1732,8 +1733,44 @@ namespace AdvancedSnip
             };
         }
 
+        private void GalleryItem_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is ListBoxItem lbi)
+            {
+                // If the right-clicked item is not already part of an existing multi-selection, select it exclusively
+                if (!lbi.IsSelected)
+                {
+                    GalleryList.SelectedItems.Clear();
+                    lbi.IsSelected = true;
+                }
+                lbi.Focus();
+            }
+        }
+
+        private static T? FindVisualParent<T>(DependencyObject? current) where T : DependencyObject
+        {
+            while (current != null)
+            {
+                if (current is T match) return match;
+                current = VisualTreeHelper.GetParent(current);
+            }
+            return null;
+        }
+
         private void GalleryContextMenu_Opening(object sender, ContextMenuEventArgs e)
         {
+            // Ensure the item under the cursor is selected if no items are currently selected
+            if (SelectedItems().Count == 0 && e.OriginalSource is DependencyObject dep)
+            {
+                var lbi = FindVisualParent<ListBoxItem>(dep);
+                if (lbi != null && !lbi.IsSelected)
+                {
+                    GalleryList.SelectedItems.Clear();
+                    lbi.IsSelected = true;
+                    lbi.Focus();
+                }
+            }
+
             var selected = SelectedItems();
             int n = selected.Count;
             if (n == 0)
@@ -2101,7 +2138,8 @@ namespace AdvancedSnip
 
         private void GalleryPin_Click(object sender, RoutedEventArgs e)
         {
-            if (GalleryList.SelectedItem is not GalleryItem item || item.IsVideo || item.IsPdf) return;
+            var item = (GalleryList.SelectedItem as GalleryItem) ?? SelectedItems().FirstOrDefault();
+            if (item == null || item.IsVideo || item.IsPdf) return;
 
             try
             {
@@ -2142,13 +2180,15 @@ namespace AdvancedSnip
 
         private void GalleryOpenFile_Click(object sender, RoutedEventArgs e)
         {
-            if (GalleryList.SelectedItem is GalleryItem item)
+            var item = (GalleryList.SelectedItem as GalleryItem) ?? SelectedItems().FirstOrDefault();
+            if (item != null)
                 OpenPath(item.FilePath);
         }
 
         private void GalleryShowInExplorer_Click(object sender, RoutedEventArgs e)
         {
-            if (GalleryList.SelectedItem is GalleryItem item)
+            var item = (GalleryList.SelectedItem as GalleryItem) ?? SelectedItems().FirstOrDefault();
+            if (item != null)
                 Process.Start("explorer.exe", $"/select,\"{item.FilePath}\"");
         }
 

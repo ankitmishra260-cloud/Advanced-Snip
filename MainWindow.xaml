@@ -235,6 +235,7 @@
         <Style x:Key="GalleryItem" TargetType="ListBoxItem">
             <Setter Property="Padding"  Value="0"/>
             <Setter Property="Margin"   Value="6"/>
+            <EventSetter Event="PreviewMouseRightButtonDown" Handler="GalleryItem_PreviewMouseRightButtonDown"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">

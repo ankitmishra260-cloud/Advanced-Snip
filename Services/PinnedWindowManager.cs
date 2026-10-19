@@ -27,6 +27,12 @@ namespace AdvancedSnip.Services
         public bool IsTopmost { get; set; } = true;
         public bool IsDesktopPinned { get; set; } = false;
         public bool IsFrameless { get; set; } = false;
+        public string StretchMode { get; set; } = "Uniform";
+        public double WindowOpacity { get; set; } = 1.0;
+        public double ImageOpacity { get; set; } = 1.0;
+        public int RotationAngle { get; set; } = 0;
+        public bool FlipHorizontal { get; set; } = false;
+        public bool FlipVertical { get; set; } = false;
     }
 
     /// <summary>

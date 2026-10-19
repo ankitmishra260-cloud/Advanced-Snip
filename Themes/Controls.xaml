@@ -365,39 +365,89 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="MenuItem">
-                    <Border x:Name="Bd" CornerRadius="6" Background="Transparent"
-                            BorderBrush="Transparent" BorderThickness="1"
-                            Margin="1" Padding="{TemplateBinding Padding}"
-                            SnapsToDevicePixels="True">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" SharedSizeGroup="MenuItemIconColumnGroup"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto" SharedSizeGroup="MenuItemGestureColumnGroup"/>
-                            </Grid.ColumnDefinitions>
+                    <Grid SnapsToDevicePixels="True" Background="Transparent">
+                        <Border x:Name="Bd" CornerRadius="6" Background="Transparent"
+                                BorderBrush="Transparent" BorderThickness="1"
+                                Margin="1" Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="20" SharedSizeGroup="MenuItemIconColumnGroup"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="MenuItemGestureColumnGroup"/>
+                                    <ColumnDefinition Width="18"/>
+                                </Grid.ColumnDefinitions>
 
-                            <ContentPresenter x:Name="IconPresenter" Grid.Column="0"
-                                              Content="{TemplateBinding Icon}"
-                                              VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <!-- Icon or Checkmark -->
+                                <Grid Grid.Column="0" Margin="0,0,6,0" VerticalAlignment="Center">
+                                    <ContentPresenter x:Name="IconPresenter" Content="{TemplateBinding Icon}" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="CheckmarkGlyph" Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                               Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center" HorizontalAlignment="Center"
+                                               Visibility="Collapsed"/>
+                                </Grid>
 
-                            <ContentPresenter Grid.Column="1" VerticalAlignment="Center"
-                                              Content="{TemplateBinding Header}"
-                                              RecognizesAccessKey="True"/>
+                                <!-- Header Text -->
+                                <ContentPresenter Grid.Column="1" VerticalAlignment="Center"
+                                                  Content="{TemplateBinding Header}"
+                                                  RecognizesAccessKey="True"/>
 
-                            <TextBlock Grid.Column="2" VerticalAlignment="Center"
-                                       Margin="16,0,0,0" FontSize="11.5"
-                                       Foreground="{DynamicResource Brush.TextMuted}"
-                                       Text="{TemplateBinding InputGestureText}"/>
-                        </Grid>
-                    </Border>
+                                <!-- Input Gesture (e.g. Ctrl+C) -->
+                                <TextBlock Grid.Column="2" VerticalAlignment="Center"
+                                           Margin="16,0,6,0" FontSize="11.5"
+                                           Foreground="{DynamicResource Brush.TextMuted}"
+                                           Text="{TemplateBinding InputGestureText}"/>
+
+                                <!-- Submenu Arrow Glyph -->
+                                <TextBlock x:Name="SubmenuArrow" Grid.Column="3" Text="&#xE76C;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="9" Foreground="{DynamicResource Brush.TextMuted}"
+                                           VerticalAlignment="Center" HorizontalAlignment="Right"
+                                           Visibility="Collapsed"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Submenu Popup with seamless mouse bridge -->
+                        <Popup x:Name="PART_Popup"
+                               AllowsTransparency="True"
+                               Placement="Right"
+                               VerticalOffset="-4"
+                               HorizontalOffset="-2"
+                               Focusable="False"
+                               PopupAnimation="None"
+                               IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}">
+                            <Border CornerRadius="8"
+                                    Background="{DynamicResource Brush.Card}"
+                                    BorderBrush="{DynamicResource Brush.BorderStrong}"
+                                    BorderThickness="1"
+                                    Padding="4"
+                                    SnapsToDevicePixels="True">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.45" Color="Black"/>
+                                </Border.Effect>
+                                <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                            </Border>
+                        </Popup>
+                    </Grid>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="HasItems" Value="True">
+                            <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Visible"/>
+                        </Trigger>
                         <Trigger Property="Icon" Value="{x:Null}">
+                            <Setter TargetName="IconPresenter" Property="Visibility" Value="Collapsed"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="CheckmarkGlyph" Property="Visibility" Value="Visible"/>
                             <Setter TargetName="IconPresenter" Property="Visibility" Value="Collapsed"/>
                         </Trigger>
                         <Trigger Property="IsHighlighted" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brush.Hover}"/>
                             <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}"/>
                             <Setter Property="Foreground" Value="{DynamicResource Brush.TextHeading}"/>
+                            <Setter TargetName="SubmenuArrow" Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
+                        </Trigger>
+                        <Trigger Property="IsSubmenuOpen" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brush.Hover}"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource Brush.TextHeading}"/>
+                            <Setter TargetName="SubmenuArrow" Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45"/>
@@ -406,6 +456,11 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+        <Style.Triggers>
+            <Trigger Property="HasItems" Value="True">
+                <Setter Property="StaysOpenOnClick" Value="True"/>
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
     <Style TargetType="ToolTip">
