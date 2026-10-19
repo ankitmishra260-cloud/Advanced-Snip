@@ -15,7 +15,7 @@ namespace AdvancedSnip
             _targetWindow = targetWindow ?? throw new ArgumentNullException(nameof(targetWindow));
             InitializeComponent();
             // Do not set Owner = targetWindow, so WPF does not hide this badge when targetWindow is collapsed
-            Topmost = true;
+            Topmost = false;
             ShowInTaskbar = false;
             UpdatePosition(initialRect);
         }
@@ -34,8 +34,21 @@ namespace AdvancedSnip
                 if (shell != IntPtr.Zero)
                 {
                     Services.Win32.SetWindowLongPtr(handle, Services.Win32.GWLP_HWNDPARENT, shell);
+                    Services.Win32.SetWindowPos(handle, IntPtr.Zero, 0, 0, 0, 0,
+                        Services.Win32.SWP_NOMOVE | Services.Win32.SWP_NOSIZE | Services.Win32.SWP_NOZORDER |
+                        Services.Win32.SWP_NOACTIVATE | Services.Win32.SWP_FRAMECHANGED);
                 }
             }
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            if (handle != IntPtr.Zero)
+            {
+                try { Services.Win32.SetWindowLongPtr(handle, Services.Win32.GWLP_HWNDPARENT, IntPtr.Zero); } catch { }
+            }
+            base.OnClosed(e);
         }
 
         public void UpdatePosition(System.Drawing.Rectangle? physicalRect = null)

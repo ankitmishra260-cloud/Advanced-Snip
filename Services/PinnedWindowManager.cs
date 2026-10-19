@@ -420,5 +420,21 @@ namespace AdvancedSnip.Services
                 }
             }
         }
+
+        /// <summary>
+        /// Closes all active pinned windows cleanly.
+        /// </summary>
+        public static void CloseAll()
+        {
+            List<PinnedClipWindow> windows;
+            lock (_lock)
+            {
+                windows = _activeWindows.ToList();
+            }
+            foreach (var win in windows)
+            {
+                try { win.Close(); } catch { }
+            }
+        }
     }
 }

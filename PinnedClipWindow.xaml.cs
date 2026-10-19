@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
@@ -46,7 +47,8 @@ namespace AdvancedSnip
         Arrow,
         Circle,
         Text,
-        Hyperlink
+        Hyperlink,
+        Crop
     }
     /// <summary>
     /// An always-on-top / desktop-pinnable draggable floating window for a screenshot.
@@ -71,7 +73,7 @@ namespace AdvancedSnip
 
         private static Brush FreezeBrush(Brush brush) { brush.Freeze(); return brush; }
 
-        private readonly BitmapSource _imageSource;
+        private BitmapSource _imageSource;
         private readonly string? _filePath;
         private double _zoomFactor = 1.0;
         private readonly DispatcherTimer _feedbackTimer;
@@ -104,6 +106,30 @@ namespace AdvancedSnip
         private Point _draggedLinkStartMouse;
         private Point _draggedLinkStartPos;
         private bool _isDraggingLink = false;
+
+        // Crop tool state
+        private bool _isCropModeActive = false;
+        private Rect _cropSelectionImg = Rect.Empty;
+        private enum CropDragHandle
+        {
+            None,
+            NewSelection,
+            Move,
+            TopLeft,
+            TopRight,
+            BottomLeft,
+            BottomRight,
+            Top,
+            Bottom,
+            Left,
+            Right
+        }
+        private CropDragHandle _activeCropHandle = CropDragHandle.None;
+        private Point _cropMouseDownOverlayPt;
+        private Rect _cropStartSelectionImg;
+        private BitmapSource? _preCropImageSource;
+        private List<AnnotationItem>? _preCropAnnotations;
+        private List<AnnotationItem>? _preCropHyperlinks;
 
         public PinnedItemRecord Record { get; private set; }
         public bool IsDesktopPinned { get; private set; } = false;
@@ -1128,12 +1154,6 @@ namespace AdvancedSnip
                 ex |= Win32.WS_EX_TRANSPARENT | Win32.WS_EX_NOACTIVATE | Win32.WS_EX_TOOLWINDOW;
                 Win32.SetWindowLong(handle, Win32.GWL_EXSTYLE, ex);
 
-                IntPtr shell = Win32.GetDesktopShellWindow();
-                if (shell != IntPtr.Zero)
-                {
-                    Win32.SetWindowLongPtr(handle, Win32.GWLP_HWNDPARENT, shell);
-                }
-
                 Win32.SetWindowPos(handle, Win32.HWND_BOTTOM, currentRect.X, currentRect.Y, currentRect.Width, currentRect.Height,
                     Win32.SWP_NOACTIVATE | Win32.SWP_SHOWWINDOW);
             }
@@ -1143,8 +1163,6 @@ namespace AdvancedSnip
                 ex &= ~Win32.WS_EX_TRANSPARENT;
                 ex &= ~Win32.WS_EX_NOACTIVATE;
                 Win32.SetWindowLong(handle, Win32.GWL_EXSTYLE, ex);
-
-                Win32.SetWindowLongPtr(handle, Win32.GWLP_HWNDPARENT, IntPtr.Zero);
 
                 ResizeMode = ResizeMode.CanResize;
                 UpdateFramelessUI();
@@ -1469,6 +1487,12 @@ namespace AdvancedSnip
 
             if (e.Key == Key.Escape)
             {
+                if (_isCropModeActive)
+                {
+                    ExitCropMode();
+                    e.Handled = true;
+                    return;
+                }
                 if (_isAnnotateModeActive)
                 {
                     ExitAnnotateMode();
@@ -1484,6 +1508,16 @@ namespace AdvancedSnip
                 e.Handled = true;
                 Unpin_Click(sender, e);
                 return;
+            }
+
+            if (_isCropModeActive)
+            {
+                if (e.Key == Key.Enter)
+                {
+                    e.Handled = true;
+                    ApplyCrop();
+                    return;
+                }
             }
 
             if (_isAnnotateModeActive && Keyboard.Modifiers == ModifierKeys.None)
@@ -1520,6 +1554,22 @@ namespace AdvancedSnip
                     UpdateToolCursor();
                     return;
                 }
+                if (e.Key == Key.X)
+                {
+                    e.Handled = true;
+                    _currentAnnotateTool = AnnotateTool.Crop;
+                    SyncToolbarRadios();
+                    EnterCropMode();
+                    return;
+                }
+            }
+
+            if (e.Key == Key.X && !Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            {
+                e.Handled = true;
+                if (_isCropModeActive) ExitCropMode();
+                else EnterCropMode();
+                return;
             }
 
             if (e.Key == Key.T && !Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
@@ -1631,6 +1681,12 @@ namespace AdvancedSnip
                         {
                             e.Handled = true;
                             AnnotateUndo_Click(sender, e);
+                            return;
+                        }
+                        if (_preCropImageSource != null)
+                        {
+                            e.Handled = true;
+                            UndoCrop();
                             return;
                         }
                         break;
@@ -3333,15 +3389,23 @@ namespace AdvancedSnip
                 {
                     case "Arrow":
                         _currentAnnotateTool = AnnotateTool.Arrow;
+                        if (_isCropModeActive) ExitCropMode();
                         break;
                     case "Circle":
                         _currentAnnotateTool = AnnotateTool.Circle;
+                        if (_isCropModeActive) ExitCropMode();
                         break;
                     case "Text":
                         _currentAnnotateTool = AnnotateTool.Text;
+                        if (_isCropModeActive) ExitCropMode();
                         break;
                     case "Hyperlink":
                         _currentAnnotateTool = AnnotateTool.Hyperlink;
+                        if (_isCropModeActive) ExitCropMode();
+                        break;
+                    case "Crop":
+                        _currentAnnotateTool = AnnotateTool.Crop;
+                        EnterCropMode();
                         break;
                 }
                 UpdateToolCursor();
@@ -3373,6 +3437,7 @@ namespace AdvancedSnip
             if (ToolCircleRadio != null) ToolCircleRadio.IsChecked = (_currentAnnotateTool == AnnotateTool.Circle);
             if (ToolTextRadio != null) ToolTextRadio.IsChecked = (_currentAnnotateTool == AnnotateTool.Text);
             if (ToolLinkRadio != null) ToolLinkRadio.IsChecked = (_currentAnnotateTool == AnnotateTool.Hyperlink);
+            if (ToolCropRadio != null) ToolCropRadio.IsChecked = (_currentAnnotateTool == AnnotateTool.Crop);
         }
 
         private void ColorSwatch_Click(object sender, MouseButtonEventArgs e)
@@ -3560,6 +3625,517 @@ namespace AdvancedSnip
             rtb.Render(visual);
             rtb.Freeze();
             return rtb;
+        }
+
+        // ── Interactive Crop ──────────────────────────────────────────────────
+
+        private void ContextCrop_Click(object sender, RoutedEventArgs e)
+        {
+            if (IsSlappedToDesktop)
+            {
+                ToastWindow.Show("Crop Unavailable", "Please restore window from desktop background before cropping.");
+                return;
+            }
+            EnterCropMode();
+        }
+
+        public void EnterCropMode()
+        {
+            if (IsSlappedToDesktop || _imageSource == null) return;
+            if (_isOcrModeActive) ExitOcrMode();
+
+            _isCropModeActive = true;
+            _currentAnnotateTool = AnnotateTool.Crop;
+            SyncToolbarRadios();
+
+            if (CropInteractionLayer != null)
+            {
+                CropInteractionLayer.Visibility = Visibility.Visible;
+            }
+
+            double w = _imageSource.PixelWidth;
+            double h = _imageSource.PixelHeight;
+            if (w > 20 && h > 20)
+            {
+                double marginX = w * 0.10;
+                double marginY = h * 0.10;
+                _cropSelectionImg = new Rect(marginX, marginY, w - (marginX * 2), h - (marginY * 2));
+            }
+            else
+            {
+                _cropSelectionImg = new Rect(0, 0, Math.Max(1, w), Math.Max(1, h));
+            }
+
+            UpdateCropVisuals();
+        }
+
+        public void ExitCropMode()
+        {
+            _isCropModeActive = false;
+            _activeCropHandle = CropDragHandle.None;
+
+            if (CropInteractionLayer != null)
+            {
+                CropInteractionLayer.Visibility = Visibility.Collapsed;
+            }
+            if (CropSelectionBox != null)
+            {
+                CropSelectionBox.Visibility = Visibility.Collapsed;
+            }
+            if (CropFloatingBar != null)
+            {
+                CropFloatingBar.Visibility = Visibility.Collapsed;
+            }
+
+            if (_isAnnotateModeActive)
+            {
+                _currentAnnotateTool = AnnotateTool.Arrow;
+                SyncToolbarRadios();
+                UpdateToolCursor();
+            }
+        }
+
+        private void UpdateCropVisuals()
+        {
+            if (!_isCropModeActive || _imageSource == null || CropInteractionLayer == null) return;
+
+            var dispRect = GetDisplayedImageRect();
+            if (dispRect.IsEmpty || dispRect.Width <= 0 || dispRect.Height <= 0) return;
+
+            double scaleX = dispRect.Width / _imageSource.PixelWidth;
+            double scaleY = dispRect.Height / _imageSource.PixelHeight;
+
+            double selLeft = dispRect.X + (_cropSelectionImg.X * scaleX);
+            double selTop = dispRect.Y + (_cropSelectionImg.Y * scaleY);
+            double selW = Math.Max(1, _cropSelectionImg.Width * scaleX);
+            double selH = Math.Max(1, _cropSelectionImg.Height * scaleY);
+
+            double totalW = ImageViewportGrid.ActualWidth;
+            double totalH = ImageViewportGrid.ActualHeight;
+
+            // 1. Position Dimmed Shades
+            Canvas.SetLeft(CropShadeTop, 0);
+            Canvas.SetTop(CropShadeTop, 0);
+            CropShadeTop.Width = totalW;
+            CropShadeTop.Height = Math.Max(0, selTop);
+
+            double bottomTop = selTop + selH;
+            Canvas.SetLeft(CropShadeBottom, 0);
+            Canvas.SetTop(CropShadeBottom, bottomTop);
+            CropShadeBottom.Width = totalW;
+            CropShadeBottom.Height = Math.Max(0, totalH - bottomTop);
+
+            Canvas.SetLeft(CropShadeLeft, 0);
+            Canvas.SetTop(CropShadeLeft, selTop);
+            CropShadeLeft.Width = Math.Max(0, selLeft);
+            CropShadeLeft.Height = selH;
+
+            double rightLeft = selLeft + selW;
+            Canvas.SetLeft(CropShadeRight, rightLeft);
+            Canvas.SetTop(CropShadeRight, selTop);
+            CropShadeRight.Width = Math.Max(0, totalW - rightLeft);
+            CropShadeRight.Height = selH;
+
+            // 2. Position Selection Box
+            Canvas.SetLeft(CropSelectionBox, selLeft);
+            Canvas.SetTop(CropSelectionBox, selTop);
+            CropSelectionBox.Width = selW;
+            CropSelectionBox.Height = selH;
+            CropSelectionBox.Visibility = Visibility.Visible;
+
+            // 3. Position Floating Bar
+            if (CropFloatingBar != null)
+            {
+                CropFloatingBar.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                double barW = CropFloatingBar.DesiredSize.Width > 0 ? CropFloatingBar.DesiredSize.Width : 220;
+                double barH = CropFloatingBar.DesiredSize.Height > 0 ? CropFloatingBar.DesiredSize.Height : 36;
+
+                double barLeft = selLeft + (selW - barW) / 2.0;
+                barLeft = Math.Clamp(barLeft, 8, Math.Max(8, totalW - barW - 8));
+
+                double barTop = selTop + selH + 10;
+                if (barTop + barH > totalH - 8)
+                {
+                    barTop = selTop - barH - 10;
+                }
+                barTop = Math.Clamp(barTop, 8, Math.Max(8, totalH - barH - 8));
+
+                Canvas.SetLeft(CropFloatingBar, barLeft);
+                Canvas.SetTop(CropFloatingBar, barTop);
+                if (CropDimensionsText != null)
+                {
+                    CropDimensionsText.Text = $"{(int)Math.Round(_cropSelectionImg.Width)} × {(int)Math.Round(_cropSelectionImg.Height)} px";
+                }
+                CropFloatingBar.Visibility = Visibility.Visible;
+            }
+        }
+
+        private CropDragHandle HitTestCropHandle(Point overlayPt)
+        {
+            if (CropSelectionBox == null || CropSelectionBox.Visibility != Visibility.Visible) return CropDragHandle.None;
+
+            double left = Canvas.GetLeft(CropSelectionBox);
+            double top = Canvas.GetTop(CropSelectionBox);
+            double width = CropSelectionBox.Width;
+            double height = CropSelectionBox.Height;
+            double right = left + width;
+            double bottom = top + height;
+
+            const double hitMargin = 10.0;
+
+            bool nearLeft = Math.Abs(overlayPt.X - left) <= hitMargin;
+            bool nearRight = Math.Abs(overlayPt.X - right) <= hitMargin;
+            bool nearTop = Math.Abs(overlayPt.Y - top) <= hitMargin;
+            bool nearBottom = Math.Abs(overlayPt.Y - bottom) <= hitMargin;
+
+            if (nearLeft && nearTop) return CropDragHandle.TopLeft;
+            if (nearRight && nearTop) return CropDragHandle.TopRight;
+            if (nearLeft && nearBottom) return CropDragHandle.BottomLeft;
+            if (nearRight && nearBottom) return CropDragHandle.BottomRight;
+
+            if (nearTop && overlayPt.X >= left && overlayPt.X <= right) return CropDragHandle.Top;
+            if (nearBottom && overlayPt.X >= left && overlayPt.X <= right) return CropDragHandle.Bottom;
+            if (nearLeft && overlayPt.Y >= top && overlayPt.Y <= bottom) return CropDragHandle.Left;
+            if (nearRight && overlayPt.Y >= top && overlayPt.Y <= bottom) return CropDragHandle.Right;
+
+            if (overlayPt.X > left && overlayPt.X < right && overlayPt.Y > top && overlayPt.Y < bottom)
+                return CropDragHandle.Move;
+
+            return CropDragHandle.NewSelection;
+        }
+
+        private Cursor GetCursorForHandle(CropDragHandle handle)
+        {
+            return handle switch
+            {
+                CropDragHandle.TopLeft or CropDragHandle.BottomRight => Cursors.SizeNWSE,
+                CropDragHandle.TopRight or CropDragHandle.BottomLeft => Cursors.SizeNESW,
+                CropDragHandle.Top or CropDragHandle.Bottom => Cursors.SizeNS,
+                CropDragHandle.Left or CropDragHandle.Right => Cursors.SizeWE,
+                CropDragHandle.Move => Cursors.SizeAll,
+                _ => Cursors.Cross
+            };
+        }
+
+        private void CropLayer_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (!_isCropModeActive || e.ChangedButton != MouseButton.Left) return;
+
+            Point overlayPt = e.GetPosition(ImageViewportGrid);
+            _cropMouseDownOverlayPt = overlayPt;
+            _cropStartSelectionImg = _cropSelectionImg;
+
+            _activeCropHandle = HitTestCropHandle(overlayPt);
+            if (_activeCropHandle == CropDragHandle.NewSelection)
+            {
+                Point? imgPt = OverlayPointToImage(overlayPt);
+                if (imgPt.HasValue)
+                {
+                    _cropSelectionImg = new Rect(imgPt.Value.X, imgPt.Value.Y, 0, 0);
+                    UpdateCropVisuals();
+                }
+            }
+
+            CropInteractionLayer.CaptureMouse();
+            e.Handled = true;
+        }
+
+        private void CropLayer_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_isCropModeActive) return;
+
+            Point overlayPt = e.GetPosition(ImageViewportGrid);
+
+            if (e.LeftButton == MouseButtonState.Pressed && _activeCropHandle != CropDragHandle.None)
+            {
+                Point? curImgPt = OverlayPointToImage(overlayPt);
+                Point? startImgPt = OverlayPointToImage(_cropMouseDownOverlayPt);
+                if (!curImgPt.HasValue || !startImgPt.HasValue) return;
+
+                double dx = curImgPt.Value.X - startImgPt.Value.X;
+                double dy = curImgPt.Value.Y - startImgPt.Value.Y;
+                double maxW = _imageSource.PixelWidth;
+                double maxH = _imageSource.PixelHeight;
+
+                switch (_activeCropHandle)
+                {
+                    case CropDragHandle.NewSelection:
+                    {
+                        double x = Math.Min(startImgPt.Value.X, curImgPt.Value.X);
+                        double y = Math.Min(startImgPt.Value.Y, curImgPt.Value.Y);
+                        double w = Math.Abs(curImgPt.Value.X - startImgPt.Value.X);
+                        double h = Math.Abs(curImgPt.Value.Y - startImgPt.Value.Y);
+                        _cropSelectionImg = new Rect(x, y, w, h);
+                        break;
+                    }
+                    case CropDragHandle.Move:
+                    {
+                        double newX = Math.Clamp(_cropStartSelectionImg.X + dx, 0, Math.Max(0, maxW - _cropStartSelectionImg.Width));
+                        double newY = Math.Clamp(_cropStartSelectionImg.Y + dy, 0, Math.Max(0, maxH - _cropStartSelectionImg.Height));
+                        _cropSelectionImg = new Rect(newX, newY, _cropStartSelectionImg.Width, _cropStartSelectionImg.Height);
+                        break;
+                    }
+                    case CropDragHandle.TopLeft:
+                    {
+                        double newLeft = Math.Clamp(_cropStartSelectionImg.Left + dx, 0, Math.Max(0, _cropStartSelectionImg.Right - 10));
+                        double newTop = Math.Clamp(_cropStartSelectionImg.Top + dy, 0, Math.Max(0, _cropStartSelectionImg.Bottom - 10));
+                        _cropSelectionImg = new Rect(newLeft, newTop, _cropStartSelectionImg.Right - newLeft, _cropStartSelectionImg.Bottom - newTop);
+                        break;
+                    }
+                    case CropDragHandle.TopRight:
+                    {
+                        double newRight = Math.Clamp(_cropStartSelectionImg.Right + dx, _cropStartSelectionImg.Left + 10, maxW);
+                        double newTop = Math.Clamp(_cropStartSelectionImg.Top + dy, 0, Math.Max(0, _cropStartSelectionImg.Bottom - 10));
+                        _cropSelectionImg = new Rect(_cropStartSelectionImg.Left, newTop, newRight - _cropStartSelectionImg.Left, _cropStartSelectionImg.Bottom - newTop);
+                        break;
+                    }
+                    case CropDragHandle.BottomLeft:
+                    {
+                        double newLeft = Math.Clamp(_cropStartSelectionImg.Left + dx, 0, Math.Max(0, _cropStartSelectionImg.Right - 10));
+                        double newBottom = Math.Clamp(_cropStartSelectionImg.Bottom + dy, _cropStartSelectionImg.Top + 10, maxH);
+                        _cropSelectionImg = new Rect(newLeft, _cropStartSelectionImg.Top, _cropStartSelectionImg.Right - newLeft, newBottom - _cropStartSelectionImg.Top);
+                        break;
+                    }
+                    case CropDragHandle.BottomRight:
+                    {
+                        double newRight = Math.Clamp(_cropStartSelectionImg.Right + dx, _cropStartSelectionImg.Left + 10, maxW);
+                        double newBottom = Math.Clamp(_cropStartSelectionImg.Bottom + dy, _cropStartSelectionImg.Top + 10, maxH);
+                        _cropSelectionImg = new Rect(_cropStartSelectionImg.Left, _cropStartSelectionImg.Top, newRight - _cropStartSelectionImg.Left, newBottom - _cropStartSelectionImg.Top);
+                        break;
+                    }
+                    case CropDragHandle.Top:
+                    {
+                        double newTop = Math.Clamp(_cropStartSelectionImg.Top + dy, 0, Math.Max(0, _cropStartSelectionImg.Bottom - 10));
+                        _cropSelectionImg = new Rect(_cropStartSelectionImg.Left, newTop, _cropStartSelectionImg.Width, _cropStartSelectionImg.Bottom - newTop);
+                        break;
+                    }
+                    case CropDragHandle.Bottom:
+                    {
+                        double newBottom = Math.Clamp(_cropStartSelectionImg.Bottom + dy, _cropStartSelectionImg.Top + 10, maxH);
+                        _cropSelectionImg = new Rect(_cropStartSelectionImg.Left, _cropStartSelectionImg.Top, _cropStartSelectionImg.Width, newBottom - _cropStartSelectionImg.Top);
+                        break;
+                    }
+                    case CropDragHandle.Left:
+                    {
+                        double newLeft = Math.Clamp(_cropStartSelectionImg.Left + dx, 0, Math.Max(0, _cropStartSelectionImg.Right - 10));
+                        _cropSelectionImg = new Rect(newLeft, _cropStartSelectionImg.Top, _cropStartSelectionImg.Right - newLeft, _cropStartSelectionImg.Height);
+                        break;
+                    }
+                    case CropDragHandle.Right:
+                    {
+                        double newRight = Math.Clamp(_cropStartSelectionImg.Right + dx, _cropStartSelectionImg.Left + 10, maxW);
+                        _cropSelectionImg = new Rect(_cropStartSelectionImg.Left, _cropStartSelectionImg.Top, newRight - _cropStartSelectionImg.Left, _cropStartSelectionImg.Height);
+                        break;
+                    }
+                }
+
+                UpdateCropVisuals();
+            }
+            else
+            {
+                var handle = HitTestCropHandle(overlayPt);
+                CropInteractionLayer.Cursor = GetCursorForHandle(handle);
+            }
+        }
+
+        private void CropLayer_MouseUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_isCropModeActive) return;
+            if (_activeCropHandle != CropDragHandle.None)
+            {
+                CropInteractionLayer.ReleaseMouseCapture();
+                _activeCropHandle = CropDragHandle.None;
+                if (_cropSelectionImg.Width < 10 || _cropSelectionImg.Height < 10)
+                {
+                    _cropSelectionImg = new Rect(0, 0, _imageSource.PixelWidth, _imageSource.PixelHeight);
+                    UpdateCropVisuals();
+                }
+            }
+        }
+
+        private void ResetCrop_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (_imageSource != null)
+            {
+                _cropSelectionImg = new Rect(0, 0, _imageSource.PixelWidth, _imageSource.PixelHeight);
+                UpdateCropVisuals();
+            }
+        }
+
+        private void CancelCrop_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            ExitCropMode();
+        }
+
+        private void ApplyCrop_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            ApplyCrop();
+        }
+
+        public void ApplyCrop()
+        {
+            if (!_isCropModeActive || _imageSource == null) return;
+
+            int cropX = (int)Math.Round(_cropSelectionImg.X);
+            int cropY = (int)Math.Round(_cropSelectionImg.Y);
+            int cropW = (int)Math.Round(_cropSelectionImg.Width);
+            int cropH = (int)Math.Round(_cropSelectionImg.Height);
+
+            cropX = Math.Clamp(cropX, 0, _imageSource.PixelWidth - 1);
+            cropY = Math.Clamp(cropY, 0, _imageSource.PixelHeight - 1);
+            cropW = Math.Clamp(cropW, 4, _imageSource.PixelWidth - cropX);
+            cropH = Math.Clamp(cropH, 4, _imageSource.PixelHeight - cropY);
+
+            if (cropW < 4 || cropH < 4)
+            {
+                ToastWindow.Show("Crop Selection Too Small", "Please select a larger area to crop.");
+                return;
+            }
+
+            // Save undo state
+            _preCropImageSource = _imageSource;
+            _preCropAnnotations = _annotations.Select(a => new AnnotationItem
+            {
+                Id = a.Id, Type = a.Type, StartX = a.StartX, StartY = a.StartY, EndX = a.EndX, EndY = a.EndY,
+                ColorHex = a.ColorHex, StrokeThickness = a.StrokeThickness, Text = a.Text, Url = a.Url, Label = a.Label
+            }).ToList();
+            _preCropHyperlinks = _hyperlinks.Select(h => new AnnotationItem
+            {
+                Id = h.Id, Type = h.Type, StartX = h.StartX, StartY = h.StartY, EndX = h.EndX, EndY = h.EndY,
+                ColorHex = h.ColorHex, StrokeThickness = h.StrokeThickness, Text = h.Text, Url = h.Url, Label = h.Label
+            }).ToList();
+
+            try
+            {
+                var cropped = new CroppedBitmap(_imageSource, new Int32Rect(cropX, cropY, cropW, cropH));
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(cropped));
+                using var ms = new MemoryStream();
+                encoder.Save(ms);
+                ms.Position = 0;
+                var decoder = new PngBitmapDecoder(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+                var newBmp = decoder.Frames[0];
+                newBmp.Freeze();
+
+                _imageSource = newBmp;
+                PinnedImage.Source = _imageSource;
+
+                // Persist to disk cache
+                if (Record != null && !string.IsNullOrEmpty(Record.CachedImagePath))
+                {
+                    try
+                    {
+                        using var fs = new FileStream(Record.CachedImagePath, FileMode.Create, FileAccess.Write);
+                        var enc = new PngBitmapEncoder();
+                        enc.Frames.Add(BitmapFrame.Create(_imageSource));
+                        enc.Save(fs);
+                    }
+                    catch { }
+                }
+
+                // Shift and filter annotations
+                for (int i = _annotations.Count - 1; i >= 0; i--)
+                {
+                    var a = _annotations[i];
+                    a.StartX -= cropX;
+                    a.StartY -= cropY;
+                    a.EndX -= cropX;
+                    a.EndY -= cropY;
+
+                    if (a.Type == AnnotationType.Text)
+                    {
+                        if (a.StartX < 0 || a.StartX > cropW || a.StartY < 0 || a.StartY > cropH)
+                            _annotations.RemoveAt(i);
+                    }
+                    else
+                    {
+                        bool sIn = a.StartX >= 0 && a.StartX <= cropW && a.StartY >= 0 && a.StartY <= cropH;
+                        bool eIn = a.EndX >= 0 && a.EndX <= cropW && a.EndY >= 0 && a.EndY <= cropH;
+                        if (!sIn && !eIn)
+                            _annotations.RemoveAt(i);
+                    }
+                }
+
+                for (int i = _hyperlinks.Count - 1; i >= 0; i--)
+                {
+                    var h = _hyperlinks[i];
+                    h.StartX -= cropX;
+                    h.StartY -= cropY;
+                    if (h.StartX < 0 || h.StartX > cropW || h.StartY < 0 || h.StartY > cropH)
+                        _hyperlinks.RemoveAt(i);
+                }
+
+                SaveAnnotationsToRecord();
+                RelayoutAnnotations();
+
+                _ocrLayout = null;
+
+                string info = $"{_imageSource.PixelWidth} × {_imageSource.PixelHeight}";
+                if (!string.IsNullOrWhiteSpace(Record?.Caption))
+                {
+                    info += $"   ·   {Record.Caption}";
+                }
+                DetailText.Text = info;
+
+                SnapWindowToImage();
+                ExitCropMode();
+                ToastWindow.Show("Image Cropped", $"{cropW} × {cropH} px (Ctrl+Z to undo)");
+            }
+            catch (Exception ex)
+            {
+                ToastWindow.Show("Crop Failed", ex.Message);
+            }
+        }
+
+        public void UndoCrop()
+        {
+            if (_preCropImageSource == null) return;
+
+            _imageSource = _preCropImageSource;
+            _preCropImageSource = null;
+            PinnedImage.Source = _imageSource;
+
+            if (_preCropAnnotations != null)
+            {
+                _annotations.Clear();
+                _annotations.AddRange(_preCropAnnotations);
+                _preCropAnnotations = null;
+            }
+            if (_preCropHyperlinks != null)
+            {
+                _hyperlinks.Clear();
+                _hyperlinks.AddRange(_preCropHyperlinks);
+                _preCropHyperlinks = null;
+            }
+
+            if (Record != null && !string.IsNullOrEmpty(Record.CachedImagePath))
+            {
+                try
+                {
+                    using var fs = new FileStream(Record.CachedImagePath, FileMode.Create, FileAccess.Write);
+                    var enc = new PngBitmapEncoder();
+                    enc.Frames.Add(BitmapFrame.Create(_imageSource));
+                    enc.Save(fs);
+                }
+                catch { }
+            }
+
+            SaveAnnotationsToRecord();
+            RelayoutAnnotations();
+            _ocrLayout = null;
+
+            string info = $"{_imageSource.PixelWidth} × {_imageSource.PixelHeight}";
+            if (!string.IsNullOrWhiteSpace(Record?.Caption))
+            {
+                info += $"   ·   {Record.Caption}";
+            }
+            DetailText.Text = info;
+
+            SnapWindowToImage();
+            ToastWindow.Show("Crop Undone", "Restored previous uncropped image");
         }
     }
 }

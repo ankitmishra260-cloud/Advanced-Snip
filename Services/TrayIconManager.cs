@@ -132,7 +132,16 @@ namespace AdvancedSnip.Services
             _menu.Items.Add(new WinForms.ToolStripMenuItem("Settings\u2026",
                 null, (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty)));
             _menu.Items.Add(new WinForms.ToolStripMenuItem("Exit",
-                null, (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty)));
+                null, (_, _) =>
+                {
+                    try
+                    {
+                        _menu?.Close();
+                        if (_icon != null) _icon.Visible = false;
+                    }
+                    catch { }
+                    ExitRequested?.Invoke(this, EventArgs.Empty);
+                }));
 
             _menu.Opening += (_, _) =>
             {

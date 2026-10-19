@@ -145,25 +145,48 @@ namespace AdvancedSnip
 
         private void ExitApp()
         {
+            if (IsExiting) return;
             IsExiting = true;
-            PinnedWindowManager.SaveAll();
-            Shutdown();
+
+            try { _tray?.Dispose(); } catch { }
+            try { PinnedWindowManager.SaveAll(); } catch { }
+            try { PinnedWindowManager.CloseAll(); } catch { }
+
+            try
+            {
+                var openWindows = new List<Window>();
+                foreach (Window win in Windows)
+                {
+                    openWindows.Add(win);
+                }
+                foreach (var win in openWindows)
+                {
+                    try { win.Close(); } catch { }
+                }
+            }
+            catch { }
+
+            try { DesktopWallpaperHost.Shutdown(); } catch { }
+            try { _recorder?.Stop(); } catch { }
+            try { TearDownRecordingUi(); } catch { }
+            try { _ocr.Stop(); } catch { }
+            try { _ocr.Save(); } catch { }
+            try { ThemeManager.Shutdown(); } catch { }
+            try { _timerSnipCts?.Cancel(); } catch { }
+            try { _timerCountdownOverlay?.Close(); } catch { }
+            try { _hotkeys?.Dispose(); } catch { }
+            try { _mutex?.Dispose(); } catch { }
+
+            Environment.Exit(0);
         }
 
         protected override void OnExit(ExitEventArgs e)
         {
-            PinnedWindowManager.SaveAll();
-            try { _recorder?.Stop(); } catch { }
-            TearDownRecordingUi();
-            _ocr.Stop();
-            _ocr.Save();
-            ThemeManager.Shutdown();
-            try { _timerSnipCts?.Cancel(); } catch { }
-            try { _timerCountdownOverlay?.Close(); } catch { }
-            _hotkeys?.Dispose();
-            _tray?.Dispose();
-            try { DesktopWallpaperHost.Shutdown(); } catch { }
-            _mutex?.Dispose();
+            if (!IsExiting)
+            {
+                ExitApp();
+                return;
+            }
             base.OnExit(e);
         }
 
