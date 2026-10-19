@@ -252,7 +252,7 @@ namespace AdvancedSnip {
                 return;
             }
             _contentLoaded = true;
-            System.Uri resourceLocater = new System.Uri("/AdvancedSnip;V2.0.0.0;component/pdfviewwindow.xaml", System.UriKind.Relative);
+            System.Uri resourceLocater = new System.Uri("/AdvancedSnip;V3.0.0.0;component/pdfviewwindow.xaml", System.UriKind.Relative);
             
             #line 1 "..\..\..\PdfViewWindow.xaml"
             System.Windows.Application.LoadComponent(this, resourceLocater);

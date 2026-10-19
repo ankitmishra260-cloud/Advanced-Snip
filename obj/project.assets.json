@@ -42,7 +42,7 @@
     "C:\\Users\\Ankit\\.nuget\\packages\\": {}
   },
   "project": {
-    "version": "2.0.0",
+    "version": "3.0.0",
     "restore": {
       "projectUniqueName": "C:\\Users\\Ankit\\Advanced-Snip\\AdvancedSnip.csproj",
       "projectName": "AdvancedSnip",

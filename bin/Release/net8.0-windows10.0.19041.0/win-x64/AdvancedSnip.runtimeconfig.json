@@ -1,0 +1,24 @@
+{
+  "runtimeOptions": {
+    "tfm": "net8.0",
+    "includedFrameworks": [
+      {
+        "name": "Microsoft.NETCore.App",
+        "version": "8.0.32"
+      },
+      {
+        "name": "Microsoft.WindowsDesktop.App",
+        "version": "8.0.32"
+      }
+    ],
+    "configProperties": {
+      "System.GC.ConserveMemory": 5,
+      "System.GC.Concurrent": true,
+      "System.GC.Server": false,
+      "System.GC.RetainVM": false,
+      "System.Reflection.Metadata.MetadataUpdater.IsSupported": false,
+      "System.Runtime.TieredPGO": true,
+      "CSWINRT_USE_WINDOWS_UI_XAML_PROJECTIONS": false
+    }
+  }
+}

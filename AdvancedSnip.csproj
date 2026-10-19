@@ -25,10 +25,10 @@
          not derived from Version. The sidebar read "v1.0" for twenty-nine releases because
          of that, which is exactly the kind of thing that costs a debugging round trip when
          you need to know which build is in front of you. -->
-    <Version>2.0.0</Version>
-    <VersionPrefix>2.0.0</VersionPrefix>
-    <AssemblyVersion>2.0.0.0</AssemblyVersion>
-    <FileVersion>2.0.0.0</FileVersion>
+    <Version>3.0.0</Version>
+    <VersionPrefix>3.0.0</VersionPrefix>
+    <AssemblyVersion>3.0.0.0</AssemblyVersion>
+    <FileVersion>3.0.0.0</FileVersion>
     <LangVersion>latest</LangVersion>
 
     <!-- Memory behaviour

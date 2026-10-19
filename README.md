@@ -1,12 +1,12 @@
-﻿# ✂ Advanced Snip by Ankit Mishra
+# ✂ Advanced Snip by Ankit Mishra
 
-**Current release:** v2.0.0
+**Current release:** v3.0.0
 
 A fast, private, feature-rich screen capture tool for Windows — built in C# / WPF / .NET 8.
 
 No telemetry. No cloud. No subscription. Everything runs locally.
 
-**Documentation status:** v2.0.0 documentation, incorporating the feature set and fixes documented through v2.38 plus the Real-Time Screen OCR Reader.
+**Documentation status:** v3.0.0 documentation, incorporating the feature set and fixes documented through v3.0.0 including Desktop Pinning and Inverted Index OCR Search.
 
 ---
 

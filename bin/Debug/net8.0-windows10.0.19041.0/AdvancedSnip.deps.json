@@ -6,7 +6,7 @@
   "compilationOptions": {},
   "targets": {
     ".NETCoreApp,Version=v8.0": {
-      "AdvancedSnip/2.0.0": {
+      "AdvancedSnip/3.0.0": {
         "dependencies": {
           "VirtualizingWrapPanel": "2.5.4",
           "runtimepack.Microsoft.Windows.SDK.NET.Ref": "10.0.19041.57"
@@ -38,7 +38,7 @@
     }
   },
   "libraries": {
-    "AdvancedSnip/2.0.0": {
+    "AdvancedSnip/3.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

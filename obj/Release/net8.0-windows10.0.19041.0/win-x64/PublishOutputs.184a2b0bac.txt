@@ -1,0 +1,2 @@
+c:\Users\Ankit\Advanced-Snip\publish_test\AdvancedSnip.pdb
+c:\Users\Ankit\Advanced-Snip\publish_test\AdvancedSnip.exe

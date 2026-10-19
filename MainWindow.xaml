@@ -610,7 +610,7 @@
                 <StackPanel DockPanel.Dock="Top" Margin="18,22,18,16">
                     <TextBlock Text="✂ Advanced Snip"
                                FontSize="16" FontWeight="Bold" Foreground="{DynamicResource Brush.Text}"/>
-                    <TextBlock x:Name="VersionText" Text="v2.0.0 by Ankit Mishra"
+                    <TextBlock x:Name="VersionText" Text="v3.0.0 by Ankit Mishra"
                                FontSize="11" Foreground="{DynamicResource Brush.TextMuted}" Margin="0,2,0,0"/>
                 </StackPanel>
 
@@ -1625,7 +1625,7 @@
                 <StackPanel Margin="40,36,40,48" MaxWidth="780" HorizontalAlignment="Left">
                     <TextBlock Text="✂ Advanced Snip" FontSize="26" FontWeight="Bold"
                                Foreground="{DynamicResource Brush.Text}"/>
-                    <TextBlock x:Name="HelpVersion" Text="Version 2.0.0 by Ankit Mishra"
+                    <TextBlock x:Name="HelpVersion" Text="Version 3.0.0 by Ankit Mishra"
                                Foreground="{DynamicResource Brush.TextFaint}" FontSize="13"
                                Margin="0,4,0,18"/>
                     <TextBlock Style="{StaticResource HelpP}"
@@ -1719,6 +1719,29 @@
                             <TextBlock Style="{StaticResource HelpP}" Text="Three organized tabs: Images (captures), Videos (recordings with durations), and PDFs (exported documents)."/>
                             <TextBlock Style="{StaticResource HelpP}" Text="Search by file name or toggle OCR text search to search captures by words found inside images (runs offline via Windows OCR engine)."/>
                             <TextBlock Style="{StaticResource HelpP}" Text="Supports multi-item selection, batch clipboard copy, and safe Recycle Bin deletion."/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource HelpH}" Text="New in v3.0: High-Performance OCR Inverted Index Search" Margin="0,0,0,10"/>
+                            <TextBlock Style="{StaticResource HelpP}" Text="• Microsecond-Fast Inverted Index: Sub-millisecond lookups across thousands of captures without lagging the UI thread."/>
+                            <TextBlock Style="{StaticResource HelpP}" Text="• Multi-Term Boolean AND: Searching 'amazon invoice' finds captures containing both terms anywhere in the image, regardless of layout or order."/>
+                            <TextBlock Style="{StaticResource HelpP}" Text="• Quoted Exact Phrases: Use quotation marks (e.g. &quot;order confirmation&quot;) to find exact contiguous word sequences."/>
+                            <TextBlock Style="{StaticResource HelpP}" Text="• Instant Prefix Matching: Partial typing like 'sett' matches 'settings', 'setup', and 'settle' as you type."/>
+                            <TextBlock Style="{StaticResource HelpP}" Text="• OCR Confusable Normalization: Automatically resolves common screen OCR character errors (0 ↔ O, 1 ↔ l ↔ I ↔ |, rn ↔ m, vv ↔ w, cl ↔ d)."/>
+                            <TextBlock Style="{StaticResource HelpP}" Text="• Typo &amp; Fuzzy Tolerance: Damerau-Levenshtein distance matching catches small typos for words 4+ letters long."/>
+                            <TextBlock Style="{StaticResource HelpP}" Text="• Auto-Ingestion &amp; Atomic Cache: Newly saved snips and scroll captures are indexed automatically in the background; cache writes are atomic and immune to corruption."/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource HelpH}" Text="New in v3.0: Pinned Captures, Desktop Sticky Notes &amp; Live Annotation" Margin="0,0,0,10"/>
+                            <TextBlock Style="{StaticResource HelpP}" Text="• Floating Pins: Pin any capture to float above other windows with adjustable opacity, zoom scale, and quick actions."/>
+                            <TextBlock Style="{StaticResource HelpP}" Text="• Pin to Desktop (WorkerW Integration): Attach pinned captures directly behind open windows onto your desktop wallpaper, functioning as permanent reference notes."/>
+                            <TextBlock Style="{StaticResource HelpP}" Text="• In-Place Annotation: Draw, highlight, pen notes, and stamp shapes directly onto pinned captures without reopening the full editor."/>
+                            <TextBlock Style="{StaticResource HelpP}" Text="• Slap to Edge: Snap pinned windows to screen borders with a quick slap-exit badge for distraction-free multitasking."/>
                         </StackPanel>
                     </Border>
 

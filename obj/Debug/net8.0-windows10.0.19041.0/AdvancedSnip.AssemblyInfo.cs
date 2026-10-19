@@ -12,11 +12,11 @@ using System.Reflection;
 
 [assembly: System.Reflection.AssemblyCompanyAttribute("AdvancedSnip")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
-[assembly: System.Reflection.AssemblyFileVersionAttribute("2.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("2.0.0+ad0eb2836e2d0bb856146055b01c927b9c3fcdbf")]
+[assembly: System.Reflection.AssemblyFileVersionAttribute("3.0.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("3.0.0+96fa78dc8dda3ce7e986e2f07e4906cc775da599")]
 [assembly: System.Reflection.AssemblyProductAttribute("AdvancedSnip")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AdvancedSnip")]
-[assembly: System.Reflection.AssemblyVersionAttribute("2.0.0.0")]
+[assembly: System.Reflection.AssemblyVersionAttribute("3.0.0.0")]
 [assembly: System.Runtime.Versioning.TargetPlatformAttribute("Windows10.0.19041.0")]
 [assembly: System.Runtime.Versioning.SupportedOSPlatformAttribute("Windows10.0.19041.0")]
 
