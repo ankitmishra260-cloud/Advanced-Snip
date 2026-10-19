@@ -1197,6 +1197,7 @@ namespace AdvancedSnip
         private CancellationTokenSource? _thumbCts;
         private string _search = "";      // file name
         private string _textSearch = "";  // words inside the picture
+        private System.Windows.Threading.DispatcherTimer? _ocrSearchDebounceTimer;
 
         /// <summary>
         /// Which list the gallery is showing. The three never mix — the questions you ask
@@ -1371,8 +1372,8 @@ namespace AdvancedSnip
 
             if (!string.IsNullOrWhiteSpace(_textSearch))
             {
-                string words = _textSearch;
-                q = q.Where(i => _app.Ocr.Matches(i.FilePath, words));
+                var matches = _app.Ocr.FindMatchingPaths(_textSearch);
+                q = q.Where(i => matches.Contains(i.FilePath));
             }
 
             q = _app.Settings.GallerySort switch
@@ -1848,12 +1849,38 @@ namespace AdvancedSnip
             _textSearch = OcrSearchInput.Text ?? "";
             TextSearchClearBtn.Visibility =
                 _textSearch.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-            _page = 0;
-            ApplyFilterAndSort();
+
+            if (string.IsNullOrWhiteSpace(_textSearch))
+            {
+                _ocrSearchDebounceTimer?.Stop();
+                _page = 0;
+                ApplyFilterAndSort();
+                return;
+            }
+
+            if (_ocrSearchDebounceTimer == null)
+            {
+                _ocrSearchDebounceTimer = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMilliseconds(200)
+                };
+                _ocrSearchDebounceTimer.Tick += (s, ev) =>
+                {
+                    _ocrSearchDebounceTimer.Stop();
+                    _page = 0;
+                    ApplyFilterAndSort();
+                };
+            }
+
+            _ocrSearchDebounceTimer.Stop();
+            _ocrSearchDebounceTimer.Start();
         }
 
         private void TextSearchClear_Click(object sender, RoutedEventArgs e)
-            => OcrSearchInput.Text = "";
+        {
+            _ocrSearchDebounceTimer?.Stop();
+            OcrSearchInput.Text = "";
+        }
 
         private void GallerySort_Changed(object sender, SelectionChangedEventArgs e)
         {

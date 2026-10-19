@@ -352,6 +352,9 @@ namespace AdvancedSnip
             _lastPath  = savedPath;
             _lastImage = savedPath == null ? image : null;
 
+            if (savedPath != null && _settings.GalleryOcrSearch)
+                _ocr.EnqueueCapture(savedPath);
+
             if (_settings.ShowTrayNotification)
             {
                 string detail = (savedPath != null ? Path.GetFileName(savedPath)
@@ -549,6 +552,9 @@ namespace AdvancedSnip
                 // notification work; without both, OnBalloonClicked has nothing to open.
                 _lastPath  = savedPath;
                 _lastImage = savedPath == null ? imageSource : null;
+
+                if (savedPath != null && _settings.GalleryOcrSearch)
+                    _ocr.EnqueueCapture(savedPath);
 
                 if (_settings.ShowTrayNotification)
                 {
@@ -1379,6 +1385,9 @@ namespace AdvancedSnip
 
                 _lastPath  = args.Path;
                 _lastImage = null;   // args.Path is on disk; no need to pin the pixels
+
+                if (_settings.GalleryOcrSearch)
+                    _ocr.EnqueueCapture(args.Path);
 
                 SnipCompleted?.Invoke(this, EventArgs.Empty);
             };
