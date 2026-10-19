@@ -62,12 +62,59 @@ namespace AdvancedSnip
         private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
-            _targetWindow.SetSlappedToDesktop(false);
+            // Snappy tactile feedback squeeze before restoring
+            var pressAnim = new DoubleAnimation(0.85, TimeSpan.FromMilliseconds(50))
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            };
+            pressAnim.Completed += (_, _) => _targetWindow.SetSlappedToDesktop(false);
+            BadgeScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, pressAnim);
+            BadgeScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleYProperty, pressAnim);
+        }
+
+        private void Window_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton == MouseButton.Middle)
+            {
+                e.Handled = true;
+                _targetWindow.CopyImageToClipboard();
+                ToastWindow.Show("Image Copied", "Pinned screenshot copied to clipboard.");
+            }
+        }
+
+        private void Window_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton == MouseButton.Left)
+            {
+                e.Handled = true;
+                _targetWindow.SetSlappedToDesktop(false);
+            }
         }
 
         private void Restore_Click(object sender, RoutedEventArgs e)
         {
             _targetWindow.SetSlappedToDesktop(false);
+        }
+
+        private void Copy_Click(object sender, RoutedEventArgs e)
+        {
+            _targetWindow.CopyImageToClipboard();
+            ToastWindow.Show("Image Copied", "Pinned screenshot copied to clipboard.");
+        }
+
+        private async void Ocr_Click(object sender, RoutedEventArgs e)
+        {
+            await _targetWindow.ExtractTextToClipboardAsync();
+        }
+
+        private void Opacity100_Click(object sender, RoutedEventArgs e) => _targetWindow.SetImageOpacity(1.0);
+        private void Opacity75_Click(object sender, RoutedEventArgs e)  => _targetWindow.SetImageOpacity(0.75);
+        private void Opacity50_Click(object sender, RoutedEventArgs e)  => _targetWindow.SetImageOpacity(0.50);
+        private void Opacity25_Click(object sender, RoutedEventArgs e)  => _targetWindow.SetImageOpacity(0.25);
+
+        private void SaveAs_Click(object sender, RoutedEventArgs e)
+        {
+            _targetWindow.SaveAs();
         }
 
         private void Unpin_Click(object sender, RoutedEventArgs e)
@@ -77,47 +124,47 @@ namespace AdvancedSnip
 
         private void Window_MouseEnter(object sender, MouseEventArgs e)
         {
-            // Transition from faint transparent (0.25) to full vibrant color (1.0)
-            var opacityAnim = new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(180))
+            // Snappy 90ms transition to full vibrant color
+            var opacityAnim = new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(90))
             {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
             };
             BadgeRoot.BeginAnimation(UIElement.OpacityProperty, opacityAnim);
 
-            var scaleAnim = new DoubleAnimation(1.18, TimeSpan.FromMilliseconds(180))
+            var scaleAnim = new DoubleAnimation(1.15, TimeSpan.FromMilliseconds(90))
             {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
             };
             BadgeScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, scaleAnim);
             BadgeScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleYProperty, scaleAnim);
 
-            var glowAnim = new DoubleAnimation(0.75, TimeSpan.FromMilliseconds(180));
+            var glowAnim = new DoubleAnimation(0.75, TimeSpan.FromMilliseconds(90));
             GlowEllipse.BeginAnimation(UIElement.OpacityProperty, glowAnim);
 
-            var blurAnim = new DoubleAnimation(12, TimeSpan.FromMilliseconds(180));
+            var blurAnim = new DoubleAnimation(12, TimeSpan.FromMilliseconds(90));
             GlowBlur.BeginAnimation(BlurEffect.RadiusProperty, blurAnim);
         }
 
         private void Window_MouseLeave(object sender, MouseEventArgs e)
         {
-            // Fade back down to faint transparent (0.25)
-            var opacityAnim = new DoubleAnimation(0.25, TimeSpan.FromMilliseconds(240))
+            // Smooth 120ms fade back down to faint transparent (0.25)
+            var opacityAnim = new DoubleAnimation(0.25, TimeSpan.FromMilliseconds(120))
             {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
             };
             BadgeRoot.BeginAnimation(UIElement.OpacityProperty, opacityAnim);
 
-            var scaleAnim = new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(240))
+            var scaleAnim = new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(120))
             {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
             };
             BadgeScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, scaleAnim);
             BadgeScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleYProperty, scaleAnim);
 
-            var glowAnim = new DoubleAnimation(0.12, TimeSpan.FromMilliseconds(240));
+            var glowAnim = new DoubleAnimation(0.12, TimeSpan.FromMilliseconds(120));
             GlowEllipse.BeginAnimation(UIElement.OpacityProperty, glowAnim);
 
-            var blurAnim = new DoubleAnimation(6, TimeSpan.FromMilliseconds(240));
+            var blurAnim = new DoubleAnimation(6, TimeSpan.FromMilliseconds(120));
             GlowBlur.BeginAnimation(BlurEffect.RadiusProperty, blurAnim);
         }
     }

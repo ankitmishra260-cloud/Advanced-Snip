@@ -5,7 +5,9 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
+using System.Threading.Tasks;
 using System.Windows.Threading;
 using AdvancedSnip.Services;
 
@@ -877,8 +879,17 @@ namespace AdvancedSnip
 
                 if (slappedInWorkerW)
                 {
-                    // Cleanly hide the interactive WPF window so it does NOT draw above desktop icons
-                    Visibility = Visibility.Collapsed;
+                    // Snappy 90ms micro-fade out into the wallpaper layer for a seamless, stutter-free handoff
+                    var fadeOut = new DoubleAnimation(0.0, TimeSpan.FromMilliseconds(90))
+                    {
+                        EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                    };
+                    fadeOut.Completed += (_, _) =>
+                    {
+                        Visibility = Visibility.Collapsed;
+                        Opacity = CurrentWindowOpacity;
+                    };
+                    BeginAnimation(UIElement.OpacityProperty, fadeOut);
                 }
                 else
                 {
@@ -915,9 +926,16 @@ namespace AdvancedSnip
 
                 ApplyDesktopLayerStyles(false, currentRect);
 
-                // Restore interactive WPF window
+                // Restore interactive WPF window with snappy 90ms micro-fade in
+                Opacity = 0.0;
                 Visibility = Visibility.Visible;
                 Show();
+
+                var fadeIn = new DoubleAnimation(CurrentWindowOpacity, TimeSpan.FromMilliseconds(90))
+                {
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                };
+                BeginAnimation(UIElement.OpacityProperty, fadeIn);
 
                 if (!_wasFramelessBeforeSlap)
                 {
@@ -1076,7 +1094,7 @@ namespace AdvancedSnip
 
         protected override void OnClosed(EventArgs e)
         {
-            if (Record != null)
+            if (Record != null && IsSlappedToDesktop)
             {
                 DesktopWallpaperHost.Unslap(Record.Id.ToString(), 0, 0, 0, 0);
             }
@@ -1097,7 +1115,7 @@ namespace AdvancedSnip
 
         private void Unpin_Click(object sender, RoutedEventArgs e)
         {
-            if (Record != null)
+            if (Record != null && IsSlappedToDesktop)
             {
                 DesktopWallpaperHost.Unslap(Record.Id.ToString(), 0, 0, 0, 0);
             }
@@ -1115,12 +1133,90 @@ namespace AdvancedSnip
 
         // ── Copy image ────────────────────────────────────────────────────────
 
-        private void Copy_Click(object sender, RoutedEventArgs e)
+        public void CopyImageToClipboard()
         {
             ClipboardService.SetImage(_imageSource, _filePath);
-            CopyStatusText.Text = "Copied!";
-            _feedbackTimer.Stop();
-            _feedbackTimer.Start();
+            if (CopyStatusText != null)
+            {
+                CopyStatusText.Text = "Copied!";
+                _feedbackTimer.Stop();
+                _feedbackTimer.Start();
+            }
+        }
+
+        private void Copy_Click(object sender, RoutedEventArgs e)
+        {
+            CopyImageToClipboard();
+        }
+
+        // ── OCR & Save As ─────────────────────────────────────────────────────
+
+        public async Task ExtractTextToClipboardAsync()
+        {
+            try
+            {
+                string? loadPath = null;
+                if (Record != null && !string.IsNullOrEmpty(Record.CachedImagePath) && File.Exists(Record.CachedImagePath))
+                {
+                    loadPath = Record.CachedImagePath;
+                }
+                else if (!string.IsNullOrEmpty(_filePath) && File.Exists(_filePath))
+                {
+                    loadPath = _filePath;
+                }
+
+                if (string.IsNullOrEmpty(loadPath))
+                {
+                    string tempDir = Path.Combine(Path.GetTempPath(), "AdvancedSnip");
+                    Directory.CreateDirectory(tempDir);
+                    loadPath = Path.Combine(tempDir, $"ocr_temp_{Guid.NewGuid():N}.png");
+                    using var fileStream = new FileStream(loadPath, FileMode.Create);
+                    var encoder = new PngBitmapEncoder();
+                    encoder.Frames.Add(BitmapFrame.Create(_imageSource));
+                    encoder.Save(fileStream);
+                }
+
+                string text = await OcrService.ReadFileAsync(loadPath);
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    Clipboard.SetText(text);
+                    int lines = text.Split('\n').Length;
+                    ToastWindow.Show("Text Copied (OCR)", $"{lines} line(s) copied to clipboard.");
+                }
+                else
+                {
+                    ToastWindow.Show("OCR", "No text detected in this image.");
+                }
+            }
+            catch (Exception ex)
+            {
+                ToastWindow.Show("OCR Error", ex.Message);
+            }
+        }
+
+        public void SaveAs()
+        {
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "Save Pinned Image As",
+                Filter = "PNG Image (*.png)|*.png|JPEG Image (*.jpg)|*.jpg|All Files (*.*)|*.*",
+                FileName = $"Pinned_{DateTime.Now:yyyyMMdd_HHmmss}.png"
+            };
+            if (dlg.ShowDialog() == true)
+            {
+                try
+                {
+                    using var stream = new FileStream(dlg.FileName, FileMode.Create);
+                    var encoder = new PngBitmapEncoder();
+                    encoder.Frames.Add(BitmapFrame.Create(_imageSource));
+                    encoder.Save(stream);
+                    ToastWindow.Show("Image Saved", Path.GetFileName(dlg.FileName));
+                }
+                catch (Exception ex)
+                {
+                    ToastWindow.Show("Save Failed", ex.Message);
+                }
+            }
         }
 
         // ── Zoom Controls ─────────────────────────────────────────────────────
@@ -1474,6 +1570,27 @@ namespace AdvancedSnip
                 Record.ImageOpacity = CurrentImageOpacity;
                 _saveDebounceTimer.Stop();
                 _saveDebounceTimer.Start();
+            }
+
+            if (IsSlappedToDesktop && Record != null)
+            {
+                var currentRect = WindowPlacement.GetPhysicalRect(this);
+                if (currentRect.IsEmpty)
+                {
+                    currentRect = new System.Drawing.Rectangle((int)Record.X, (int)Record.Y, (int)Record.Width, (int)Record.Height);
+                }
+                var bmp = CreateSlapBitmap();
+                if (bmp != null)
+                {
+                    DesktopWallpaperHost.Slap(
+                        Record.Id.ToString(),
+                        bmp,
+                        (float)CurrentImageOpacity,
+                        currentRect.X,
+                        currentRect.Y,
+                        currentRect.Width,
+                        currentRect.Height);
+                }
             }
         }
 

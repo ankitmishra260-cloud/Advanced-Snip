@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.Linq;
 using System.Runtime.InteropServices;
 using WinForms = System.Windows.Forms;
 
@@ -59,9 +60,18 @@ namespace AdvancedSnip.Services
         /// <summary>Start or stop a screen recording.</summary>
         public event EventHandler? RecordRequested;
 
+        /// <summary>Slap all open pinned windows to the desktop background.</summary>
+        public event EventHandler? SlapAllRequested;
+
+        /// <summary>Restore all slapped pinned windows back to interactive floating windows.</summary>
+        public event EventHandler? UnslapAllRequested;
+
         private readonly WinForms.ToolStripMenuItem _snipItem;
         private readonly WinForms.ToolStripMenuItem _ocrItem;
         private readonly WinForms.ToolStripMenuItem _recordItem;
+        private readonly WinForms.ToolStripMenuItem _slapAllItem;
+        private readonly WinForms.ToolStripMenuItem _unslapAllItem;
+        private readonly WinForms.ToolStripSeparator _pinSeparator;
         private Font? _boldFont;
 
         /// <summary>
@@ -102,16 +112,38 @@ namespace AdvancedSnip.Services
             _recordItem = new WinForms.ToolStripMenuItem("Record the screen",
                 null, (_, _) => RecordRequested?.Invoke(this, EventArgs.Empty));
 
+            _slapAllItem = new WinForms.ToolStripMenuItem("Slap all pins to desktop",
+                null, (_, _) => SlapAllRequested?.Invoke(this, EventArgs.Empty));
+
+            _unslapAllItem = new WinForms.ToolStripMenuItem("Restore all slapped pins",
+                null, (_, _) => UnslapAllRequested?.Invoke(this, EventArgs.Empty));
+
+            _pinSeparator = new WinForms.ToolStripSeparator();
+
             _menu.Items.Add(openItem);
             _menu.Items.Add(new WinForms.ToolStripSeparator());
             _menu.Items.Add(_snipItem);
             _menu.Items.Add(_ocrItem);
             _menu.Items.Add(_recordItem);
+            _menu.Items.Add(_pinSeparator);
+            _menu.Items.Add(_slapAllItem);
+            _menu.Items.Add(_unslapAllItem);
             _menu.Items.Add(new WinForms.ToolStripSeparator());
             _menu.Items.Add(new WinForms.ToolStripMenuItem("Settings\u2026",
                 null, (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty)));
             _menu.Items.Add(new WinForms.ToolStripMenuItem("Exit",
                 null, (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty)));
+
+            _menu.Opening += (_, _) =>
+            {
+                var windows = PinnedWindowManager.ActiveWindows;
+                bool anySlapped = windows.Any(w => w.IsSlappedToDesktop);
+                bool anyFloating = windows.Any(w => !w.IsSlappedToDesktop);
+
+                _slapAllItem.Visible = anyFloating;
+                _unslapAllItem.Visible = anySlapped;
+                _pinSeparator.Visible = anyFloating || anySlapped;
+            };
 
             UpdateTheme();
             ThemeManager.ThemeChanged += (_, _) => UpdateTheme();

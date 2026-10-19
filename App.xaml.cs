@@ -114,6 +114,8 @@ namespace AdvancedSnip
             _tray.SettingsRequested       += (_, _) => ShowSettings();
             _tray.ExitRequested           += (_, _) => ExitApp();
             _tray.RecordRequested         += (_, _) => ToggleRecording();
+            _tray.SlapAllRequested        += (_, _) => PinnedWindowManager.SlapAllToDesktop();
+            _tray.UnslapAllRequested      += (_, _) => PinnedWindowManager.UnslapAllFromDesktop();
             _tray.SetShortcuts(_settings.SnipHotkey.ToString(), _settings.RecordHotkey.ToString(), _settings.OcrHotkey.ToString());
             _tray.Show();
 

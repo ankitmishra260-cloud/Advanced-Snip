@@ -11,9 +11,11 @@
         Width="36"
         Height="36"
         Cursor="Hand"
-        ToolTip="Slapped to Desktop (Wallpaper Mode) · Click red dot to restore window"
+        ToolTip="Slapped to Desktop (Wallpaper Mode)&#x0a;• Left-Click: Restore to floating window&#x0a;• Middle-Click: Copy image to clipboard&#x0a;• Right-Click: Context menu (OCR, Opacity, Save)"
         MouseEnter="Window_MouseEnter"
         MouseLeave="Window_MouseLeave"
+        MouseDown="Window_MouseDown"
+        MouseDoubleClick="Window_MouseDoubleClick"
         MouseLeftButtonDown="Window_MouseLeftButtonDown">
 
     <Grid x:Name="BadgeRoot"
@@ -27,9 +29,34 @@
 
         <Grid.ContextMenu>
             <ContextMenu>
-                <MenuItem Header="Restore Window" Click="Restore_Click">
+                <MenuItem Header="Restore Window" Click="Restore_Click" FontWeight="SemiBold">
                     <MenuItem.Icon>
                         <TextBlock Text="&#xE8A7;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator/>
+                <MenuItem Header="Copy Image (Ctrl+C)" Click="Copy_Click">
+                    <MenuItem.Icon>
+                        <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.TextHeading}"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Extract Text (OCR)" Click="Ocr_Click">
+                    <MenuItem.Icon>
+                        <TextBlock Text="&#xE8C1;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Opacity">
+                    <MenuItem.Icon>
+                        <TextBlock Text="&#xE790;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                    </MenuItem.Icon>
+                    <MenuItem Header="100% – Solid" Click="Opacity100_Click"/>
+                    <MenuItem Header="75% – Subtle" Click="Opacity75_Click"/>
+                    <MenuItem Header="50% – Watermark" Click="Opacity50_Click"/>
+                    <MenuItem Header="25% – Faint" Click="Opacity25_Click"/>
+                </MenuItem>
+                <MenuItem Header="Save Image As…" Click="SaveAs_Click">
+                    <MenuItem.Icon>
+                        <TextBlock Text="&#xE74E;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.TextHeading}"/>
                     </MenuItem.Icon>
                 </MenuItem>
                 <Separator/>

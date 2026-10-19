@@ -125,6 +125,14 @@ namespace AdvancedSnip.Services
                 // Setup hidden top-level window to receive WM_SETTINGCHANGE and WM_DISPLAYCHANGE broadcasts
                 SetupNotificationWindow();
 
+                // Optimize wallpaper crossfade animation speed for crisp, snappy responsiveness without stutter
+                try
+                {
+                    using var key = Registry.CurrentUser.CreateSubKey(@"Control Panel\Personalization\Desktop Slideshow");
+                    key?.SetValue("AnimationDuration", 150, RegistryValueKind.DWord);
+                }
+                catch { }
+
                 // Heartbeat timer (polls every 2.5s only when slaps are active as a fallback)
                 _heartbeatTimer = new System.Threading.Timer(_ =>
                 {
@@ -231,11 +239,14 @@ namespace AdvancedSnip.Services
             {
                 try
                 {
-                    if (_activeSlaps.TryGetValue(id, out var entry))
+                    if (!_activeSlaps.TryGetValue(id, out var entry))
                     {
-                        entry.Bitmap.Dispose();
-                        _activeSlaps.Remove(id);
+                        // Item was not slapped to desktop; leave the desktop wallpaper completely untouched
+                        return false;
                     }
+
+                    entry.Bitmap.Dispose();
+                    _activeSlaps.Remove(id);
 
                     if (_activeSlaps.Count > 0)
                     {
@@ -252,6 +263,17 @@ namespace AdvancedSnip.Services
                     Log($"Unslap exception: {ex}");
                     return false;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Returns true if the screenshot with the given id is currently slapped to the desktop.
+        /// </summary>
+        public static bool IsSlapped(string id)
+        {
+            lock (_syncLock)
+            {
+                return _activeSlaps.ContainsKey(id);
             }
         }
 

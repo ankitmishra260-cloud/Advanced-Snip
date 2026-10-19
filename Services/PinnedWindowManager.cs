@@ -388,5 +388,35 @@ namespace AdvancedSnip.Services
                 winA.SetOverlapState(isOverlapping, overlapCount);
             }
         }
+
+        /// <summary>
+        /// Slaps all active pinned windows behind desktop icons.
+        /// </summary>
+        public static void SlapAllToDesktop()
+        {
+            var windows = ActiveWindows;
+            foreach (var win in windows)
+            {
+                if (!win.IsSlappedToDesktop)
+                {
+                    win.SetSlappedToDesktop(true);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Restores all active slapped pins back to interactive floating windows.
+        /// </summary>
+        public static void UnslapAllFromDesktop()
+        {
+            var windows = ActiveWindows;
+            foreach (var win in windows)
+            {
+                if (win.IsSlappedToDesktop)
+                {
+                    win.SetSlappedToDesktop(false);
+                }
+            }
+        }
     }
 }
