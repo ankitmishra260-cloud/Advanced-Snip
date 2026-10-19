@@ -148,18 +148,14 @@
                     BorderThickness="0,0,0,1"
                     Padding="8,5,8,5">
                 <DockPanel x:Name="HeaderBar" LastChildFill="True">
-                <!-- Left: Pin badge & Stacking indicator & info -->
+                <!-- Left: Unpin action & Stacking indicator & info -->
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Left">
-                    <Border CornerRadius="4" Background="{DynamicResource Brush.AccentSoft}"
-                            BorderBrush="{DynamicResource Brush.Accent}" BorderThickness="1"
-                            Padding="6,2" Margin="0,0,6,0" VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE718;" FontFamily="Segoe MDL2 Assets" FontSize="10.5"
-                                       Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                            <TextBlock Text="Pinned" FontSize="11" FontWeight="SemiBold"
-                                       Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Border>
+                    <!-- Unpin button on Top Left (Replaces 'Pinned' badge) -->
+                    <Button x:Name="UnpinBtn"
+                            Style="{StaticResource UnpinButtonStyle}"
+                            Click="Unpin_Click"
+                            ToolTip="Unpin (Esc) · Keeps image safely in clipboard"
+                            Margin="0,0,6,0"/>
 
                     <!-- Stacking Overlap Badge (Visible when overlapping another pin) -->
                     <Border x:Name="StackBadge" CornerRadius="4"
@@ -181,10 +177,7 @@
                                Text="Screenshot"
                                Foreground="{DynamicResource Brush.TextMuted}"
                                FontSize="11"
-                               VerticalAlignment="Center"
-                               Cursor="Hand"
-                               ToolTip="Click to rename (F2)"
-                               MouseLeftButtonDown="DetailText_Click"/>
+                               VerticalAlignment="Center"/>
                 </StackPanel>
 
                 <!-- Right: Action buttons -->
@@ -245,30 +238,27 @@
                         </StackPanel>
                     </Button>
 
+                    <!-- Zoom reset (only visible if zoomed) -->
                     <Button x:Name="ZoomResetBtn"
                             Style="{StaticResource PinnedActionButtonStyle}"
                             Click="ZoomReset_Click"
                             ToolTip="Reset zoom (100%) · Scroll wheel to zoom"
+                            Visibility="Collapsed"
                             Margin="0,0,4,0">
                         <TextBlock x:Name="ZoomText" Text="100%" FontSize="11" Foreground="{DynamicResource Brush.TextMuted}"/>
                     </Button>
 
-                    <Button x:Name="UnpinBtn"
-                            Style="{StaticResource UnpinButtonStyle}"
-                            Click="Unpin_Click"
-                            ToolTip="Unpin (Esc) - Keeps image safely in clipboard"/>
+                    <!-- Vertical Three Dots Menu Button (far right, opens same context menu as right-click) -->
+                    <Button x:Name="VerticalMenuBtn"
+                            Style="{StaticResource PinnedActionButtonStyle}"
+                            Click="VerticalMenuBtn_Click"
+                            ToolTip="More options · OCR, Canvas, Transparency, Rotate"
+                            Padding="6,3"
+                            Margin="2,0,0,0">
+                        <TextBlock Text="&#xE712;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                   Foreground="{DynamicResource Brush.TextHeading}" VerticalAlignment="Center"/>
+                    </Button>
                 </StackPanel>
-
-                <!-- Center Drag Grip -->
-                <TextBlock Text="&#x22EF;"
-                           FontSize="14"
-                           FontWeight="Bold"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"
-                           Foreground="{DynamicResource Brush.TextMuted}"
-                           Opacity="0.6"
-                           Cursor="SizeAll"
-                           ToolTip="Drag anywhere to reposition"/>
                 </DockPanel>
             </Border>
 
@@ -281,8 +271,26 @@
                     Cursor="SizeAll">
                     <Border.ContextMenu>
                         <ContextMenu x:Name="ImageContextMenu">
-                            <!-- Window Modes -->
-                            <MenuItem x:Name="ContextFrameless" Header="Minimal mode (Frameless)" Click="ContextFrameless_Click">
+                            <!-- 1. Text & OCR Recognition -->
+                            <MenuItem x:Name="ContextSelectTextOcr" Header="Select Text (OCR)..." Click="ContextSelectTextOcr_Click">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE8C1;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem x:Name="ContextCopyAllOcr" Header="Copy All Text (OCR)" Click="ContextCopyAllOcr_Click">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <Separator/>
+
+                            <!-- 2. Window Modes & Placement -->
+                            <MenuItem x:Name="ContextTopmost" Header="Always on Top" Click="ContextTopmost_Click">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE718;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem x:Name="ContextFrameless" Header="Minimal Mode (Frameless)" Click="ContextFrameless_Click">
                                 <MenuItem.Icon>
                                     <TextBlock Text="&#xE740;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
                                 </MenuItem.Icon>
@@ -292,27 +300,14 @@
                                     <TextBlock Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
                                 </MenuItem.Icon>
                             </MenuItem>
-                            <MenuItem x:Name="ContextSlap" Header="Slap to Desktop (Behind Icons)" Click="ContextSlap_Click">
+                            <MenuItem x:Name="ContextSlap" Header="Slap to Desktop" Click="ContextSlap_Click">
                                 <MenuItem.Icon>
                                     <TextBlock Text="&#xE72D;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="#FF4D4F"/>
                                 </MenuItem.Icon>
                             </MenuItem>
-                            <MenuItem x:Name="ContextTopmost" Header="Always on Top" Click="ContextTopmost_Click">
-                                <MenuItem.Icon>
-                                    <TextBlock Text="&#xE718;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
-                                </MenuItem.Icon>
-                            </MenuItem>
                             <Separator/>
 
-                            <!-- Rename -->
-                            <MenuItem x:Name="ContextRename" Header="Rename image... (F2)" Click="Rename_Click">
-                                <MenuItem.Icon>
-                                    <TextBlock Text="&#xE8AC;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <Separator/>
-
-                            <!-- Canvas & Scaling Options -->
+                            <!-- 3. Canvas & Transformations -->
                             <MenuItem x:Name="ContextCanvasHeader" Header="Canvas &amp; Sizing">
                                 <MenuItem.Icon>
                                     <TextBlock Text="&#xE799;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
@@ -329,13 +324,13 @@
                                 </MenuItem>
                             </MenuItem>
 
-                            <!-- Transparency & Opacity (Combined Entry) -->
+                            <!-- Transparency & Opacity -->
                             <MenuItem x:Name="ContextTranslucencyHeader" Header="Transparency">
                                 <MenuItem.Icon>
                                     <TextBlock Text="&#xE790;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
                                 </MenuItem.Icon>
 
-                                <!-- 1. Pin Window Transparency -->
+                                <!-- Window Transparency -->
                                 <MenuItem x:Name="ContextWinOpacityHeader" Header="Pin Window Transparency">
                                     <MenuItem.Icon>
                                         <TextBlock Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
@@ -347,7 +342,7 @@
                                     <MenuItem x:Name="ContextWinOpacity30"  Header="30% – Ghost Trace" Click="WinOpacity30_Click"/>
                                 </MenuItem>
 
-                                <!-- 2. Image Transparency -->
+                                <!-- Image Transparency -->
                                 <MenuItem x:Name="ContextImgOpacityHeader" Header="Image Transparency">
                                     <MenuItem.Icon>
                                         <TextBlock Text="&#xEB9F;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
@@ -390,13 +385,31 @@
                             </MenuItem>
 
                             <Separator/>
-                            <MenuItem Header="Copy image (Ctrl+C)" Click="Copy_Click">
+
+                            <!-- 4. Operations & File -->
+                            <MenuItem Header="Copy Image (Ctrl+C)" Click="Copy_Click">
                                 <MenuItem.Icon>
                                     <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
                                 </MenuItem.Icon>
                             </MenuItem>
-                            <MenuItem Header="Reset zoom (100%)" Click="ZoomReset_Click"/>
+                            <MenuItem Header="Save Image As... (Ctrl+S)" Click="SaveAs_Click">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE74E;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem x:Name="ContextRename" Header="Rename Image... (F2)" Click="Rename_Click">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE8AC;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="Reset Zoom (100%)" Click="ZoomReset_Click">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE71E;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
                             <Separator/>
+
+                            <!-- 5. Dismiss -->
                             <MenuItem Header="Unpin" Click="Unpin_Click">
                                 <MenuItem.Icon>
                                     <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Danger}"/>
@@ -405,29 +418,104 @@
                         </ContextMenu>
                     </Border.ContextMenu>
 
-                    <ScrollViewer x:Name="ImageScrollViewer"
-                                  HorizontalScrollBarVisibility="Disabled"
-                                  VerticalScrollBarVisibility="Disabled"
-                                  Focusable="False">
-                        <Grid x:Name="ImageHost" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                            <Grid.LayoutTransform>
-                                <ScaleTransform x:Name="ImageScale" ScaleX="1.0" ScaleY="1.0"/>
-                            </Grid.LayoutTransform>
-                            <Image x:Name="PinnedImage"
-                                   Stretch="Uniform"
-                                   HorizontalAlignment="Stretch"
-                                   VerticalAlignment="Stretch"
-                                   RenderOptions.BitmapScalingMode="HighQuality"
-                                   RenderTransformOrigin="0.5,0.5">
-                                <Image.RenderTransform>
-                                    <TransformGroup>
-                                        <ScaleTransform x:Name="ImageFlipScale" ScaleX="1.0" ScaleY="1.0"/>
-                                        <RotateTransform x:Name="ImageRotate" Angle="0"/>
-                                    </TransformGroup>
-                                </Image.RenderTransform>
-                            </Image>
-                        </Grid>
-                    </ScrollViewer>
+                    <Grid x:Name="ImageViewportGrid">
+                        <ScrollViewer x:Name="ImageScrollViewer"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Disabled"
+                                      Focusable="False">
+                            <Grid x:Name="ImageHost" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                <Grid.LayoutTransform>
+                                    <ScaleTransform x:Name="ImageScale" ScaleX="1.0" ScaleY="1.0"/>
+                                </Grid.LayoutTransform>
+                                <Image x:Name="PinnedImage"
+                                       Stretch="Uniform"
+                                       HorizontalAlignment="Stretch"
+                                       VerticalAlignment="Stretch"
+                                       RenderOptions.BitmapScalingMode="HighQuality"
+                                       RenderTransformOrigin="0.5,0.5">
+                                    <Image.RenderTransform>
+                                        <TransformGroup>
+                                            <ScaleTransform x:Name="ImageFlipScale" ScaleX="1.0" ScaleY="1.0"/>
+                                            <RotateTransform x:Name="ImageRotate" Angle="0"/>
+                                        </TransformGroup>
+                                    </Image.RenderTransform>
+                                </Image>
+
+                                <!-- Canvas rendering subtle detected word boxes (Active only during OCR Mode) -->
+                                <Canvas x:Name="OcrTextCanvas"
+                                        Background="Transparent"
+                                        Visibility="Collapsed"
+                                        IsHitTestVisible="False"
+                                        RenderTransformOrigin="0.5,0.5">
+                                    <Canvas.RenderTransform>
+                                        <TransformGroup>
+                                            <ScaleTransform x:Name="OcrFlipScale" ScaleX="1.0" ScaleY="1.0"/>
+                                            <RotateTransform x:Name="OcrRotate" Angle="0"/>
+                                        </TransformGroup>
+                                    </Canvas.RenderTransform>
+                                </Canvas>
+                            </Grid>
+                        </ScrollViewer>
+
+                        <!-- Interactive OCR Selection & Overlay Layer -->
+                        <Canvas x:Name="OcrInteractionLayer"
+                                Background="Transparent"
+                                Visibility="Collapsed"
+                                Cursor="IBeam"
+                                ClipToBounds="True"
+                                MouseLeftButtonDown="OcrLayer_MouseDown"
+                                MouseMove="OcrLayer_MouseMove"
+                                MouseLeftButtonUp="OcrLayer_MouseUp">
+
+                            <!-- Top Helper Banner in OCR Mode -->
+                            <Border x:Name="OcrBanner"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Top"
+                                    Background="#EE141824"
+                                    BorderBrush="{DynamicResource Brush.BorderStrong}"
+                                    BorderThickness="1"
+                                    CornerRadius="14"
+                                    Padding="10,4"
+                                    Margin="0,8,0,0">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.55" Color="Black"/>
+                                </Border.Effect>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE8C1;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                               Foreground="{DynamicResource Brush.Accent}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Drag to select text · Click Copy · Esc to exit" FontSize="11"
+                                               Foreground="{DynamicResource Brush.TextHeading}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <Border CornerRadius="4" Background="{DynamicResource Brush.Subtle}" Padding="6,2" Cursor="Hand"
+                                            MouseLeftButtonDown="ExitOcrMode_Click" ToolTip="Exit OCR selection mode">
+                                        <TextBlock Text="Done" FontSize="10.5" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource Brush.Accent}"/>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Floating Copy Button Popup (Appears right next to cursor after selecting text) -->
+                            <Border x:Name="OcrFloatingCopyPopup"
+                                    Visibility="Collapsed"
+                                    Background="#F2161A26"
+                                    BorderBrush="{DynamicResource Brush.Accent}"
+                                    BorderThickness="1.5"
+                                    CornerRadius="6"
+                                    Padding="8,4"
+                                    Cursor="Hand"
+                                    ToolTip="Click to copy selected text (Ctrl+C)"
+                                    MouseLeftButtonDown="OcrFloatingCopy_Click">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.65" Color="Black"/>
+                                </Border.Effect>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                               Foreground="{DynamicResource Brush.Accent}" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="OcrFloatingCopyLabel" Text="Copy" FontSize="11" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource Brush.TextHeading}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </Canvas>
+                    </Grid>
             </Border>
         </Grid>
 
@@ -449,7 +537,7 @@
                         <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.55" Color="Black"/>
                     </Border.Effect>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <!-- Restore Title Bar Button -->
+                        <!-- 1. Restore Title Bar Button -->
                         <Button Style="{StaticResource OverlayMiniButtonStyle}"
                                 Click="ExitFrameless_Click"
                                 ToolTip="Show Title Bar / Full Controls">
@@ -457,7 +545,7 @@
                                        Foreground="{DynamicResource Brush.Accent}"/>
                         </Button>
 
-                        <!-- Topmost toggle -->
+                        <!-- 2. Topmost toggle -->
                         <Button x:Name="OverlayTopmostBtn"
                                 Style="{StaticResource OverlayMiniButtonStyle}"
                                 Click="TopmostToggle_Click"
@@ -466,16 +554,7 @@
                                        Foreground="{DynamicResource Brush.Accent}"/>
                         </Button>
 
-                        <!-- All Options Menu Button -->
-                        <Button x:Name="OverlayMenuBtn"
-                                Style="{StaticResource OverlayMiniButtonStyle}"
-                                Click="OverlayMenu_Click"
-                                ToolTip="All Options · Desktop Pin, Zoom, Copy, Settings">
-                            <TextBlock Text="&#xE712;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                       Foreground="{DynamicResource Brush.TextHeading}"/>
-                        </Button>
-
-                        <!-- Copy button -->
+                        <!-- 3. Copy button -->
                         <Button Style="{StaticResource OverlayMiniButtonStyle}"
                                 Click="Copy_Click"
                                 ToolTip="Copy image (Ctrl+C)">
@@ -483,7 +562,16 @@
                                        Foreground="{DynamicResource Brush.TextHeading}"/>
                         </Button>
 
-                        <!-- Unpin button -->
+                        <!-- 4. Three dots menu button (placed to the right of Copy icon and before Unpin button) -->
+                        <Button x:Name="OverlayMenuBtn"
+                                Style="{StaticResource OverlayMiniButtonStyle}"
+                                Click="OverlayMenu_Click"
+                                ToolTip="All Options · Desktop Pin, Zoom, Copy, OCR, Settings">
+                            <TextBlock Text="&#xE712;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                       Foreground="{DynamicResource Brush.TextHeading}"/>
+                        </Button>
+
+                        <!-- 5. Unpin button -->
                         <Button Style="{StaticResource OverlayMiniButtonStyle}"
                                 Click="Unpin_Click"
                                 ToolTip="Unpin (Esc)">

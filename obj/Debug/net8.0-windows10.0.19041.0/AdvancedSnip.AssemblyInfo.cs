@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AdvancedSnip")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("2.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("2.0.0+de69495cbba50a9c6029c2f9cadd31bceceaa033")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("2.0.0+fa070919ea332a7bdc8987224b1876225535442c")]
 [assembly: System.Reflection.AssemblyProductAttribute("AdvancedSnip")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AdvancedSnip")]
 [assembly: System.Reflection.AssemblyVersionAttribute("2.0.0.0")]

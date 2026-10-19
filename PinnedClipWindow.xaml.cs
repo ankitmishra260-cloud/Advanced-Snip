@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -25,11 +27,25 @@ namespace AdvancedSnip
     /// </summary>
     public partial class PinnedClipWindow : Window
     {
+        private static readonly Brush WordPlainBrush = FreezeBrush(new SolidColorBrush(Color.FromArgb(0x22, 0x3B, 0x82, 0xF6)));
+        private static readonly Brush WordPlainBorderBrush = FreezeBrush(new SolidColorBrush(Color.FromArgb(0x55, 0x3B, 0x82, 0xF6)));
+        private static readonly Brush WordSelectedBrush = FreezeBrush(new SolidColorBrush(Color.FromArgb(0x80, 0xF5, 0x9E, 0x0B)));
+        private static readonly Brush WordSelectedBorderBrush = FreezeBrush(new SolidColorBrush(Color.FromArgb(0xFF, 0xF5, 0x9E, 0x0B)));
+
+        private static Brush FreezeBrush(Brush brush) { brush.Freeze(); return brush; }
+
         private readonly BitmapSource _imageSource;
         private readonly string? _filePath;
         private double _zoomFactor = 1.0;
         private readonly DispatcherTimer _feedbackTimer;
         private readonly DispatcherTimer _saveDebounceTimer;
+
+        private OcrLayout? _ocrLayout;
+        private bool _isOcrModeActive = false;
+        private bool _isOcrSelecting = false;
+        private int _ocrSelFrom = -1;
+        private int _ocrSelTo = -1;
+        private readonly List<System.Windows.Shapes.Rectangle> _ocrWordBoxes = new();
 
         public PinnedItemRecord Record { get; private set; }
         public bool IsDesktopPinned { get; private set; } = false;
@@ -131,6 +147,11 @@ namespace AdvancedSnip
                 SetWindowOpacity(CurrentWindowOpacity);
                 SetImageOpacity(CurrentImageOpacity);
                 UpdateTransforms();
+
+                if (ZoomResetBtn != null)
+                {
+                    ZoomResetBtn.Visibility = Math.Abs(_zoomFactor - 1.0) > 0.01 ? Visibility.Visible : Visibility.Collapsed;
+                }
             };
 
             Closed += (_, _) =>
@@ -330,6 +351,27 @@ namespace AdvancedSnip
 
         private void Window_PreviewMouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
+            if (_isOcrModeActive && _ocrLayout != null)
+            {
+                Point ptOnImage = e.GetPosition(PinnedImage);
+                var imgPt = OverlayPointToImage(ptOnImage);
+                if (imgPt != null)
+                {
+                    int idx = _ocrLayout.NearestWord(imgPt.Value);
+                    if (idx >= 0)
+                    {
+                        int line = _ocrLayout.Words[idx].Line;
+                        int from = idx, to = idx;
+                        while (from > 0 && _ocrLayout.Words[from - 1].Line == line) from--;
+                        while (to < _ocrLayout.Words.Count - 1 && _ocrLayout.Words[to + 1].Line == line) to++;
+                        _ocrSelFrom = from;
+                        _ocrSelTo = to;
+                        PaintOcrSelection();
+                        Point curPt = e.GetPosition(OcrInteractionLayer);
+                        ShowFloatingCopyAt(curPt);
+                    }
+                }
+            }
             e.Handled = true;
         }
 
@@ -349,6 +391,10 @@ namespace AdvancedSnip
             ZoomText.Text = $"{Math.Round(_zoomFactor * 100):0}%";
 
             bool zoomed = Math.Abs(_zoomFactor - 1.0) > 0.01;
+            if (ZoomResetBtn != null)
+            {
+                ZoomResetBtn.Visibility = zoomed ? Visibility.Visible : Visibility.Collapsed;
+            }
             ImageScrollViewer.HorizontalScrollBarVisibility = zoomed ? System.Windows.Controls.ScrollBarVisibility.Auto : System.Windows.Controls.ScrollBarVisibility.Disabled;
             ImageScrollViewer.VerticalScrollBarVisibility = zoomed ? System.Windows.Controls.ScrollBarVisibility.Auto : System.Windows.Controls.ScrollBarVisibility.Disabled;
 
@@ -512,6 +558,13 @@ namespace AdvancedSnip
                 if (btn != null) return;
             }
 
+            if (_isOcrModeActive)
+            {
+                // In OCR mode, clicking on the image selects text, so only allow dragging from HeaderCard
+                if (e.OriginalSource is DependencyObject depObj && !IsDescendantOf(depObj, HeaderCard))
+                    return;
+            }
+
             if (e.ButtonState == MouseButtonState.Pressed)
             {
                 BringToTop();
@@ -556,7 +609,22 @@ namespace AdvancedSnip
             {
                 _slapBadge.UpdatePosition();
             }
+            if (_isOcrModeActive)
+            {
+                RelayoutOcrWordBoxes();
+            }
             PinnedWindowManager.CheckOverlaps();
+        }
+
+        private static bool IsDescendantOf(DependencyObject? node, DependencyObject? parent)
+        {
+            if (parent == null) return false;
+            while (node != null)
+            {
+                if (ReferenceEquals(node, parent)) return true;
+                node = VisualTreeHelper.GetParent(node);
+            }
+            return false;
         }
 
         private static System.Windows.Controls.Button? FindParentButton(DependencyObject? current)
@@ -777,11 +845,22 @@ namespace AdvancedSnip
             if (FramelessOverlay != null) FramelessOverlay.Opacity = Math.Min(CurrentWindowOpacity, 0.45);
         }
 
+        private void VerticalMenuBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (ImageContextMenu != null)
+            {
+                ImageContextMenu.PlacementTarget = sender as UIElement ?? this;
+                ImageContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                ImageContextMenu.IsOpen = true;
+            }
+        }
+
         private void OverlayMenu_Click(object sender, RoutedEventArgs e)
         {
             if (ImageContextMenu != null)
             {
                 ImageContextMenu.PlacementTarget = sender as UIElement;
+                ImageContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
                 ImageContextMenu.IsOpen = true;
             }
         }
@@ -797,12 +876,6 @@ namespace AdvancedSnip
 
         private void ContextSlap_Click(object sender, RoutedEventArgs e)
             => SetSlappedToDesktop(!IsSlappedToDesktop);
-
-        private void DetailText_Click(object sender, MouseButtonEventArgs e)
-        {
-            e.Handled = true;
-            PromptRename();
-        }
 
         private void Rename_Click(object sender, RoutedEventArgs e)
         {
@@ -1135,7 +1208,16 @@ namespace AdvancedSnip
 
         public void CopyImageToClipboard()
         {
-            ClipboardService.SetImage(_imageSource, _filePath);
+            string? path = _filePath ?? Record?.CachedImagePath;
+            if (Application.Current is App app)
+            {
+                app.CopyImage(_imageSource, path);
+            }
+            else
+            {
+                ClipboardService.SetImage(_imageSource, path);
+            }
+
             if (CopyStatusText != null)
             {
                 CopyStatusText.Text = "Copied!";
@@ -1230,11 +1312,24 @@ namespace AdvancedSnip
                 ImageScale.ScaleY = _zoomFactor;
             }
 
-            ZoomText.Text = $"{Math.Round(_zoomFactor * 100):0}%";
+            if (ZoomText != null)
+            {
+                ZoomText.Text = $"{Math.Round(_zoomFactor * 100):0}%";
+            }
 
             bool zoomed = Math.Abs(_zoomFactor - 1.0) > 0.01;
+            if (ZoomResetBtn != null)
+            {
+                ZoomResetBtn.Visibility = zoomed ? Visibility.Visible : Visibility.Collapsed;
+            }
+
             ImageScrollViewer.HorizontalScrollBarVisibility = zoomed ? System.Windows.Controls.ScrollBarVisibility.Auto : System.Windows.Controls.ScrollBarVisibility.Disabled;
             ImageScrollViewer.VerticalScrollBarVisibility = zoomed ? System.Windows.Controls.ScrollBarVisibility.Auto : System.Windows.Controls.ScrollBarVisibility.Disabled;
+
+            if (_isOcrModeActive)
+            {
+                RelayoutOcrWordBoxes();
+            }
 
             if (Record != null)
             {
@@ -1283,6 +1378,12 @@ namespace AdvancedSnip
         {
             if (e.Key == Key.Escape)
             {
+                if (_isOcrModeActive)
+                {
+                    ExitOcrMode();
+                    e.Handled = true;
+                    return;
+                }
                 e.Handled = true;
                 Unpin_Click(sender, e);
                 return;
@@ -1292,6 +1393,14 @@ namespace AdvancedSnip
             {
                 e.Handled = true;
                 SetTopmost(!IsTopmost);
+                return;
+            }
+
+            if (e.Key == Key.O && !Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            {
+                e.Handled = true;
+                if (_isOcrModeActive) ExitOcrMode();
+                else _ = EnterOcrModeAsync();
                 return;
             }
 
@@ -1368,9 +1477,26 @@ namespace AdvancedSnip
                             return;
                         }
                         break;
+
                     case Key.C:
                         e.Handled = true;
+                        if (_isOcrModeActive && _ocrSelFrom >= 0)
+                        {
+                            CopySelectedOcrText();
+                            return;
+                        }
                         Copy_Click(sender, e);
+                        return;
+
+                    case Key.O:
+                        e.Handled = true;
+                        if (_isOcrModeActive) ExitOcrMode();
+                        else _ = EnterOcrModeAsync();
+                        return;
+
+                    case Key.S:
+                        e.Handled = true;
+                        SaveAs();
                         return;
 
                     case Key.T:
@@ -1445,6 +1571,11 @@ namespace AdvancedSnip
             }
 
             UpdateStretchUI();
+
+            if (_isOcrModeActive)
+            {
+                RelayoutOcrWordBoxes();
+            }
 
             if (Record != null)
             {
@@ -1664,10 +1795,19 @@ namespace AdvancedSnip
             {
                 ImageRotate.Angle = CurrentRotation;
             }
+            if (OcrRotate != null)
+            {
+                OcrRotate.Angle = CurrentRotation;
+            }
             if (ImageFlipScale != null)
             {
                 ImageFlipScale.ScaleX = CurrentFlipH ? -1.0 : 1.0;
                 ImageFlipScale.ScaleY = CurrentFlipV ? -1.0 : 1.0;
+            }
+            if (OcrFlipScale != null)
+            {
+                OcrFlipScale.ScaleX = CurrentFlipH ? -1.0 : 1.0;
+                OcrFlipScale.ScaleY = CurrentFlipV ? -1.0 : 1.0;
             }
             if (ImageScale != null)
             {
@@ -1690,5 +1830,349 @@ namespace AdvancedSnip
         private void FlipH_Click(object sender, RoutedEventArgs e) => ToggleFlipH();
         private void FlipV_Click(object sender, RoutedEventArgs e) => ToggleFlipV();
         private void ResetTransform_Click(object sender, RoutedEventArgs e) => ResetTransforms();
+
+        // ── Interactive OCR Selection Mode ────────────────────────────────────
+
+        public Rect GetDisplayedImageRect()
+        {
+            if (_imageSource == null || PinnedImage == null || PinnedImage.ActualWidth <= 0 || PinnedImage.ActualHeight <= 0)
+                return Rect.Empty;
+
+            double imgW = _imageSource.PixelWidth;
+            double imgH = _imageSource.PixelHeight;
+            if (imgW <= 0 || imgH <= 0) return Rect.Empty;
+
+            double containerW = PinnedImage.ActualWidth;
+            double containerH = PinnedImage.ActualHeight;
+
+            switch (CurrentStretchMode)
+            {
+                case "Fill":
+                    return new Rect(0, 0, containerW, containerH);
+
+                case "UniformToFill":
+                {
+                    double scale = Math.Max(containerW / imgW, containerH / imgH);
+                    double rw = imgW * scale;
+                    double rh = imgH * scale;
+                    return new Rect((containerW - rw) / 2.0, (containerH - rh) / 2.0, rw, rh);
+                }
+
+                case "Actual":
+                {
+                    return new Rect((containerW - imgW) / 2.0, (containerH - imgH) / 2.0, imgW, imgH);
+                }
+
+                case "Uniform":
+                default:
+                {
+                    double scale = Math.Min(containerW / imgW, containerH / imgH);
+                    double rw = imgW * scale;
+                    double rh = imgH * scale;
+                    return new Rect((containerW - rw) / 2.0, (containerH - rh) / 2.0, rw, rh);
+                }
+            }
+        }
+
+        private Point? OverlayPointToImage(Point overlayPt)
+        {
+            if (_imageSource == null) return null;
+            var rect = GetDisplayedImageRect();
+            if (rect.IsEmpty || rect.Width <= 0 || rect.Height <= 0) return null;
+
+            double imgX = (overlayPt.X - rect.X) * (_imageSource.PixelWidth / rect.Width);
+            double imgY = (overlayPt.Y - rect.Y) * (_imageSource.PixelHeight / rect.Height);
+
+            return new Point(
+                Math.Clamp(imgX, 0, _imageSource.PixelWidth),
+                Math.Clamp(imgY, 0, _imageSource.PixelHeight));
+        }
+
+        public async Task EnterOcrModeAsync()
+        {
+            if (_isOcrModeActive) return;
+
+            if (CopyStatusText != null) CopyStatusText.Text = "Scanning text...";
+
+            try
+            {
+                if (_ocrLayout == null)
+                {
+                    _ocrLayout = await OcrService.ReadLayoutAsync(_imageSource);
+                }
+
+                if (_ocrLayout == null || !_ocrLayout.Any)
+                {
+                    if (CopyStatusText != null) CopyStatusText.Text = "No text found";
+                    ToastWindow.Show("OCR", "No readable text or numbers detected in this image.");
+                    return;
+                }
+
+                _isOcrModeActive = true;
+                _isOcrSelecting = false;
+                _ocrSelFrom = _ocrSelTo = -1;
+
+                if (OcrTextCanvas != null) OcrTextCanvas.Visibility = Visibility.Visible;
+                if (OcrInteractionLayer != null) OcrInteractionLayer.Visibility = Visibility.Visible;
+                if (OcrFloatingCopyPopup != null) OcrFloatingCopyPopup.Visibility = Visibility.Collapsed;
+
+                if (CopyStatusText != null)
+                {
+                    CopyStatusText.Text = $"{_ocrLayout.Words.Count} words selectable";
+                    _feedbackTimer.Stop();
+                    _feedbackTimer.Start();
+                }
+
+                RelayoutOcrWordBoxes();
+            }
+            catch (Exception ex)
+            {
+                _isOcrModeActive = false;
+                ToastWindow.Show("OCR Error", ex.Message);
+            }
+        }
+
+        public void ExitOcrMode()
+        {
+            if (!_isOcrModeActive) return;
+
+            _isOcrModeActive = false;
+            _isOcrSelecting = false;
+            _ocrSelFrom = _ocrSelTo = -1;
+
+            if (OcrTextCanvas != null)
+            {
+                OcrTextCanvas.Children.Clear();
+                OcrTextCanvas.Visibility = Visibility.Collapsed;
+            }
+            if (OcrInteractionLayer != null)
+            {
+                OcrInteractionLayer.Visibility = Visibility.Collapsed;
+            }
+            if (OcrFloatingCopyPopup != null)
+            {
+                OcrFloatingCopyPopup.Visibility = Visibility.Collapsed;
+            }
+            _ocrWordBoxes.Clear();
+
+            if (CopyStatusText != null) CopyStatusText.Text = "";
+        }
+
+        private void ExitOcrMode_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            ExitOcrMode();
+        }
+
+        private void RelayoutOcrWordBoxes()
+        {
+            if (OcrTextCanvas == null) return;
+            OcrTextCanvas.Children.Clear();
+            _ocrWordBoxes.Clear();
+
+            if (_ocrLayout == null || !_ocrLayout.Any || !_isOcrModeActive) return;
+
+            var rect = GetDisplayedImageRect();
+            if (rect.IsEmpty || rect.Width <= 0 || rect.Height <= 0) return;
+
+            double scaleX = rect.Width / _imageSource.PixelWidth;
+            double scaleY = rect.Height / _imageSource.PixelHeight;
+
+            for (int i = 0; i < _ocrLayout.Words.Count; i++)
+            {
+                var word = _ocrLayout.Words[i];
+                var box = word.Box;
+
+                double left = rect.X + (box.X * scaleX);
+                double top = rect.Y + (box.Y * scaleY);
+                double width = Math.Max(2, box.Width * scaleX);
+                double height = Math.Max(2, box.Height * scaleY);
+
+                var r = new System.Windows.Shapes.Rectangle
+                {
+                    Width = width,
+                    Height = height,
+                    RadiusX = 2,
+                    RadiusY = 2,
+                    Fill = WordPlainBrush,
+                    Stroke = WordPlainBorderBrush,
+                    StrokeThickness = 1,
+                    IsHitTestVisible = false
+                };
+                Canvas.SetLeft(r, left);
+                Canvas.SetTop(r, top);
+                OcrTextCanvas.Children.Add(r);
+                _ocrWordBoxes.Add(r);
+            }
+
+            PaintOcrSelection();
+        }
+
+        private void PaintOcrSelection()
+        {
+            int lo = Math.Min(_ocrSelFrom, _ocrSelTo);
+            int hi = Math.Max(_ocrSelFrom, _ocrSelTo);
+
+            for (int i = 0; i < _ocrWordBoxes.Count; i++)
+            {
+                bool selected = (_ocrSelFrom >= 0 && i >= lo && i <= hi);
+                var targetFill = selected ? WordSelectedBrush : WordPlainBrush;
+                var targetStroke = selected ? WordSelectedBorderBrush : WordPlainBorderBrush;
+
+                if (!ReferenceEquals(_ocrWordBoxes[i].Fill, targetFill))
+                    _ocrWordBoxes[i].Fill = targetFill;
+
+                if (!ReferenceEquals(_ocrWordBoxes[i].Stroke, targetStroke))
+                    _ocrWordBoxes[i].Stroke = targetStroke;
+            }
+        }
+
+        private void OcrLayer_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+
+            if (e.ChangedButton == MouseButton.Right)
+            {
+                ExitOcrMode();
+                return;
+            }
+
+            if (e.ChangedButton == MouseButton.Left && _ocrLayout != null)
+            {
+                Point ptOnImage = e.GetPosition(PinnedImage);
+                var imgPt = OverlayPointToImage(ptOnImage);
+                if (imgPt != null)
+                {
+                    int wordIdx = _ocrLayout.NearestWord(imgPt.Value);
+                    if (wordIdx >= 0)
+                    {
+                        _isOcrSelecting = true;
+                        _ocrSelFrom = _ocrSelTo = wordIdx;
+                        OcrInteractionLayer.CaptureMouse();
+                        PaintOcrSelection();
+                        if (OcrFloatingCopyPopup != null) OcrFloatingCopyPopup.Visibility = Visibility.Collapsed;
+                    }
+                    else
+                    {
+                        _ocrSelFrom = _ocrSelTo = -1;
+                        PaintOcrSelection();
+                        if (OcrFloatingCopyPopup != null) OcrFloatingCopyPopup.Visibility = Visibility.Collapsed;
+                    }
+                }
+            }
+        }
+
+        private void OcrLayer_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_isOcrSelecting || _ocrLayout == null) return;
+            e.Handled = true;
+
+            Point ptOnImage = e.GetPosition(PinnedImage);
+            var imgPt = OverlayPointToImage(ptOnImage);
+            if (imgPt != null)
+            {
+                int wordIdx = _ocrLayout.NearestWord(imgPt.Value);
+                if (wordIdx >= 0 && wordIdx != _ocrSelTo)
+                {
+                    _ocrSelTo = wordIdx;
+                    PaintOcrSelection();
+                }
+            }
+        }
+
+        private void OcrLayer_MouseUp(object sender, MouseButtonEventArgs e)
+        {
+            if (_isOcrSelecting)
+            {
+                _isOcrSelecting = false;
+                OcrInteractionLayer.ReleaseMouseCapture();
+                e.Handled = true;
+
+                if (_ocrSelFrom >= 0 && _ocrLayout != null)
+                {
+                    string text = _ocrLayout.Join(_ocrSelFrom, _ocrSelTo).Trim();
+                    if (!string.IsNullOrEmpty(text))
+                    {
+                        Point curPt = e.GetPosition(OcrInteractionLayer);
+                        ShowFloatingCopyAt(curPt);
+                    }
+                    else if (OcrFloatingCopyPopup != null)
+                    {
+                        OcrFloatingCopyPopup.Visibility = Visibility.Collapsed;
+                    }
+                }
+            }
+        }
+
+        private void ShowFloatingCopyAt(Point curPt)
+        {
+            if (OcrFloatingCopyPopup == null || OcrInteractionLayer == null) return;
+
+            OcrFloatingCopyPopup.UpdateLayout();
+            double btnW = OcrFloatingCopyPopup.ActualWidth > 0 ? OcrFloatingCopyPopup.ActualWidth : 68;
+            double btnH = OcrFloatingCopyPopup.ActualHeight > 0 ? OcrFloatingCopyPopup.ActualHeight : 28;
+
+            double x = curPt.X + 12;
+            double y = curPt.Y - 14;
+
+            x = Math.Clamp(x, 6, Math.Max(6, OcrInteractionLayer.ActualWidth - btnW - 6));
+            y = Math.Clamp(y, 6, Math.Max(6, OcrInteractionLayer.ActualHeight - btnH - 6));
+
+            Canvas.SetLeft(OcrFloatingCopyPopup, x);
+            Canvas.SetTop(OcrFloatingCopyPopup, y);
+            OcrFloatingCopyPopup.Visibility = Visibility.Visible;
+        }
+
+        private void OcrFloatingCopy_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            CopySelectedOcrText();
+        }
+
+        public void CopySelectedOcrText()
+        {
+            if (_ocrLayout == null || _ocrSelFrom < 0) return;
+
+            string text = _ocrLayout.Join(_ocrSelFrom, _ocrSelTo).Trim();
+            if (string.IsNullOrEmpty(text)) return;
+
+            for (int i = 0; i < 5; i++)
+            {
+                try
+                {
+                    Clipboard.SetText(text);
+                    break;
+                }
+                catch
+                {
+                    System.Threading.Thread.Sleep(20);
+                }
+            }
+
+            if (OcrFloatingCopyPopup != null)
+            {
+                OcrFloatingCopyPopup.Visibility = Visibility.Collapsed;
+            }
+
+            if (CopyStatusText != null)
+            {
+                CopyStatusText.Text = "Text Copied!";
+                _feedbackTimer.Stop();
+                _feedbackTimer.Start();
+            }
+
+            string preview = text.Replace('\n', ' ');
+            if (preview.Length > 48) preview = preview[..48] + "…";
+            ToastWindow.Show("Text Copied (OCR)", $"“{preview}”");
+        }
+
+        private async void ContextSelectTextOcr_Click(object sender, RoutedEventArgs e)
+            => await EnterOcrModeAsync();
+
+        private async void ContextCopyAllOcr_Click(object sender, RoutedEventArgs e)
+            => await ExtractTextToClipboardAsync();
+
+        private void SaveAs_Click(object sender, RoutedEventArgs e)
+            => SaveAs();
     }
 }
