@@ -71,6 +71,7 @@ namespace AdvancedSnip
             try
             {
                 var dialog = new ThemedDialog();
+                dialog.Width = 620;
 
                 if (owner != null && owner.IsVisible && !ReferenceEquals(owner, dialog))
                     dialog.Owner = owner;

@@ -7,7 +7,9 @@
         Background="Transparent"
         ResizeMode="NoResize"
         SizeToContent="Height"
-        Width="440"
+        MinWidth="500"
+        Width="620"
+        MaxWidth="850"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
         FontFamily="Segoe UI"
@@ -112,8 +114,8 @@
                        LineHeight="20"
                        Foreground="{DynamicResource Brush.TextBody}"/>
 
-            <TextBox x:Name="InputTextBox" Margin="0,12,0,0" Padding="8,6" FontSize="13"
-                     Visibility="Collapsed"/>
+            <TextBox x:Name="InputTextBox" Margin="0,14,0,0" Padding="10,8" FontSize="13"
+                     HorizontalAlignment="Stretch" Visibility="Collapsed"/>
         </DockPanel>
     </Border>
 </Window>

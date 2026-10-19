@@ -117,6 +117,73 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="ToolRadioStyle" TargetType="RadioButton">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Padding" Value="7,4"/>
+            <Setter Property="Margin" Value="1,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Root" CornerRadius="5" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Brush.Hover}"/>
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.TextHeading}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Brush.AccentSoft}"/>
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="MiniToolbarBtnStyle" TargetType="Button">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="Margin" Value="1,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextHeading}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" CornerRadius="4" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Brush.Hover}"/>
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.75"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid x:Name="RootWindowGrid" SnapsToDevicePixels="True">
@@ -189,6 +256,19 @@
                                FontSize="11"
                                VerticalAlignment="Center"
                                Margin="0,0,6,0"/>
+
+                    <!-- Annotate Mode Toggle (Normal Mode Only) -->
+                    <Button x:Name="AnnotateBtn"
+                            Style="{StaticResource PinnedActionButtonStyle}"
+                            Click="AnnotateToggle_Click"
+                            ToolTip="Annotate &amp; Links · Draw arrow, circle, text, or add clickable links (Ctrl+E)"
+                            Margin="0,0,4,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="AnnotateIcon" Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="11" Margin="0,0,4,0"
+                                       Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="AnnotateLabel" Text="Annotate" FontSize="11" Foreground="{DynamicResource Brush.TextHeading}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
 
                     <Button x:Name="CopyBtn"
                             Style="{StaticResource PinnedActionButtonStyle}"
@@ -271,6 +351,47 @@
                     Cursor="SizeAll">
                     <Border.ContextMenu>
                         <ContextMenu x:Name="ImageContextMenu">
+                            <!-- Annotations & Hyperlinks (Normal Mode Only) -->
+                            <MenuItem x:Name="ContextAnnotateHeader" Header="Annotate &amp; Links">
+                                <MenuItem.Icon>
+                                    <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Accent}"/>
+                                </MenuItem.Icon>
+                                <MenuItem Header="Annotation Toolbar (Ctrl+E)" Click="ContextAnnotateToolbar_Click">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="12"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <Separator/>
+                                <MenuItem Header="Draw Arrow (A)" Click="ContextDrawArrow_Click">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xEDBE;" FontFamily="Segoe MDL2 Assets" FontSize="12"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Draw Circle (C)" Click="ContextDrawCircle_Click">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xEA3B;" FontFamily="Segoe MDL2 Assets" FontSize="12"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Add Text Annotation (T)" Click="ContextAddText_Click">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE8D2;" FontFamily="Segoe MDL2 Assets" FontSize="12"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <Separator/>
+                                <MenuItem Header="Add Hyperlink Button... (L)" Click="ContextAddLink_Click">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE71B;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="#FF00D2FF"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <Separator/>
+                                <MenuItem Header="Clear All Annotations" Click="ContextClearAnnotations_Click">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Brush.Danger}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                            </MenuItem>
+                            <Separator/>
+
                             <!-- 1. Text & OCR Recognition -->
                             <MenuItem x:Name="ContextSelectTextOcr" Header="Select Text (OCR)..." Click="ContextSelectTextOcr_Click">
                                 <MenuItem.Icon>
@@ -441,6 +562,35 @@
                                     </Image.RenderTransform>
                                 </Image>
 
+                                <!-- Canvas rendering persistent shape annotations (Arrow, Circle, Text) -->
+                                <Canvas x:Name="AnnotationCanvas"
+                                        Background="Transparent"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Stretch"
+                                        IsHitTestVisible="False"
+                                        RenderTransformOrigin="0.5,0.5">
+                                    <Canvas.RenderTransform>
+                                        <TransformGroup>
+                                            <ScaleTransform x:Name="AnnotationFlipScale" ScaleX="1.0" ScaleY="1.0"/>
+                                            <RotateTransform x:Name="AnnotationRotate" Angle="0"/>
+                                        </TransformGroup>
+                                    </Canvas.RenderTransform>
+                                </Canvas>
+
+                                <!-- Canvas hosting interactive Hyperlink buttons -->
+                                <Canvas x:Name="HyperlinkCanvas"
+                                        Background="Transparent"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Stretch"
+                                        RenderTransformOrigin="0.5,0.5">
+                                    <Canvas.RenderTransform>
+                                        <TransformGroup>
+                                            <ScaleTransform x:Name="HyperlinkFlipScale" ScaleX="1.0" ScaleY="1.0"/>
+                                            <RotateTransform x:Name="HyperlinkRotate" Angle="0"/>
+                                        </TransformGroup>
+                                    </Canvas.RenderTransform>
+                                </Canvas>
+
                                 <!-- Canvas rendering subtle detected word boxes (Active only during OCR Mode) -->
                                 <Canvas x:Name="OcrTextCanvas"
                                         Background="Transparent"
@@ -493,28 +643,210 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- Floating Copy Button Popup (Appears right next to cursor after selecting text) -->
+                            <!-- Floating Action Popup (Appears right next to cursor after selecting text) -->
                             <Border x:Name="OcrFloatingCopyPopup"
                                     Visibility="Collapsed"
                                     Background="#F2161A26"
                                     BorderBrush="{DynamicResource Brush.Accent}"
                                     BorderThickness="1.5"
                                     CornerRadius="6"
-                                    Padding="8,4"
-                                    Cursor="Hand"
-                                    ToolTip="Click to copy selected text (Ctrl+C)"
-                                    MouseLeftButtonDown="OcrFloatingCopy_Click">
+                                    Padding="4,3">
                                 <Border.Effect>
                                     <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.65" Color="Black"/>
                                 </Border.Effect>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                               Foreground="{DynamicResource Brush.Accent}" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="OcrFloatingCopyLabel" Text="Copy" FontSize="11" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource Brush.TextHeading}" VerticalAlignment="Center"/>
+                                    <!-- Open Link Button (Visible when selection contains/is a URL) -->
+                                    <Border x:Name="OcrFloatingOpenLinkBtn"
+                                            CornerRadius="4"
+                                            Background="{DynamicResource Brush.Subtle}"
+                                            Padding="6,3"
+                                            Margin="0,0,4,0"
+                                            Cursor="Hand"
+                                            Visibility="Collapsed"
+                                            ToolTip="Open recognized link in default browser"
+                                            MouseLeftButtonDown="OcrFloatingOpenLink_Click">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="&#xE71B;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                       Foreground="#FF00D2FF" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Open Link" FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource Brush.TextHeading}" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Copy Button -->
+                                    <Border x:Name="OcrFloatingCopyBtn"
+                                            CornerRadius="4"
+                                            Background="{DynamicResource Brush.Subtle}"
+                                            Padding="6,3"
+                                            Cursor="Hand"
+                                            ToolTip="Click to copy selected text (Ctrl+C)"
+                                            MouseLeftButtonDown="OcrFloatingCopy_Click">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                       Foreground="{DynamicResource Brush.Accent}" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="OcrFloatingCopyLabel" Text="Copy" FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource Brush.TextHeading}" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Border>
                                 </StackPanel>
                             </Border>
                         </Canvas>
+
+                        <!-- Interactive Annotation Drawing & Overlay Layer (Active during Annotate Mode) -->
+                        <Canvas x:Name="AnnotationInteractionLayer"
+                                Background="Transparent"
+                                Visibility="Collapsed"
+                                Cursor="Cross"
+                                ClipToBounds="True"
+                                MouseLeftButtonDown="AnnotationLayer_MouseDown"
+                                MouseMove="AnnotationLayer_MouseMove"
+                                MouseLeftButtonUp="AnnotationLayer_MouseUp">
+
+                            <!-- In-place text box for text annotations -->
+                            <Border x:Name="AnnotationTextHost"
+                                    Visibility="Collapsed"
+                                    Background="#EE141824"
+                                    BorderBrush="{DynamicResource Brush.Accent}"
+                                    BorderThickness="1.5"
+                                    CornerRadius="5"
+                                    Padding="4,2">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.6" Color="Black"/>
+                                </Border.Effect>
+                                <TextBox x:Name="AnnotationInputBox"
+                                         MinWidth="120"
+                                         Background="Transparent"
+                                         Foreground="{DynamicResource Brush.TextHeading}"
+                                         BorderThickness="0"
+                                         FontSize="13"
+                                         FontWeight="SemiBold"
+                                         CaretBrush="{DynamicResource Brush.Accent}"
+                                         KeyDown="AnnotationInputBox_KeyDown"
+                                         LostFocus="AnnotationInputBox_LostFocus"/>
+                            </Border>
+
+                            <!-- Live preview shape path (arrows) -->
+                            <Path x:Name="DrawPreviewPath"
+                                  Visibility="Collapsed"
+                                  Stroke="#FFFF4D4F"
+                                  Fill="#FFFF4D4F"
+                                  StrokeThickness="3"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"/>
+
+                            <!-- Live preview ellipse (circles) -->
+                            <Ellipse x:Name="DrawPreviewEllipse"
+                                     Visibility="Collapsed"
+                                     Stroke="#FFFF4D4F"
+                                     Fill="Transparent"
+                                     StrokeThickness="3"/>
+                        </Canvas>
+
+                        <!-- Floating Annotation Toolbar (Top-Center of Viewport) -->
+                        <Border x:Name="AnnotateToolbar"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Top"
+                                Margin="0,10,0,0"
+                                Background="#F2141826"
+                                BorderBrush="{DynamicResource Brush.BorderStrong}"
+                                BorderThickness="1.2"
+                                CornerRadius="18"
+                                Padding="6,3"
+                                Visibility="Collapsed">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.65" Color="Black"/>
+                            </Border.Effect>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <!-- Tool selection -->
+                                <RadioButton x:Name="ToolArrowRadio"
+                                             Style="{StaticResource ToolRadioStyle}"
+                                             GroupName="AnnotateTools"
+                                             IsChecked="True"
+                                             Click="ToolRadio_Click"
+                                             Tag="Arrow"
+                                             ToolTip="Arrow (A) · Drag to draw directed arrow">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="&#xEDBE;" FontFamily="Segoe MDL2 Assets" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Arrow" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </RadioButton>
+
+                                <RadioButton x:Name="ToolCircleRadio"
+                                             Style="{StaticResource ToolRadioStyle}"
+                                             GroupName="AnnotateTools"
+                                             Click="ToolRadio_Click"
+                                             Tag="Circle"
+                                             ToolTip="Circle (C) · Drag to draw circle/ellipse">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="&#xEA3B;" FontFamily="Segoe MDL2 Assets" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Circle" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </RadioButton>
+
+                                <RadioButton x:Name="ToolTextRadio"
+                                             Style="{StaticResource ToolRadioStyle}"
+                                             GroupName="AnnotateTools"
+                                             Click="ToolRadio_Click"
+                                             Tag="Text"
+                                             ToolTip="Text (T) · Click image to type label">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="&#xE8D2;" FontFamily="Segoe MDL2 Assets" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Text" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </RadioButton>
+
+                                <RadioButton x:Name="ToolLinkRadio"
+                                             Style="{StaticResource ToolRadioStyle}"
+                                             GroupName="AnnotateTools"
+                                             Click="ToolRadio_Click"
+                                             Tag="Hyperlink"
+                                             ToolTip="Add Hyperlink Button (L) · Click image to place clickable website link">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="&#xE71B;" FontFamily="Segoe MDL2 Assets" FontSize="11" Foreground="#FF00D2FF" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Link" FontSize="11" FontWeight="SemiBold" Foreground="#FF00D2FF" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </RadioButton>
+
+                                <Border Width="1" Height="16" Background="{DynamicResource Brush.Border}" Margin="5,0"/>
+
+                                <!-- Color swatches -->
+                                <Border x:Name="ColorSwatchRed" Width="18" Height="18" CornerRadius="9" Background="#FFFF4D4F"
+                                        BorderBrush="#FFFFFFFF" BorderThickness="2" Margin="2,0" Cursor="Hand"
+                                        ToolTip="Red" MouseLeftButtonDown="ColorSwatch_Click" Tag="#FFFF4D4F"/>
+                                <Border x:Name="ColorSwatchBlue" Width="18" Height="18" CornerRadius="9" Background="#FF3B82F6"
+                                        BorderBrush="Transparent" BorderThickness="2" Margin="2,0" Cursor="Hand"
+                                        ToolTip="Blue" MouseLeftButtonDown="ColorSwatch_Click" Tag="#FF3B82F6"/>
+                                <Border x:Name="ColorSwatchGreen" Width="18" Height="18" CornerRadius="9" Background="#FF10B981"
+                                        BorderBrush="Transparent" BorderThickness="2" Margin="2,0" Cursor="Hand"
+                                        ToolTip="Green" MouseLeftButtonDown="ColorSwatch_Click" Tag="#FF10B981"/>
+                                <Border x:Name="ColorSwatchAmber" Width="18" Height="18" CornerRadius="9" Background="#FFF59E0B"
+                                        BorderBrush="Transparent" BorderThickness="2" Margin="2,0" Cursor="Hand"
+                                        ToolTip="Amber" MouseLeftButtonDown="ColorSwatch_Click" Tag="#FFF59E0B"/>
+                                <Border x:Name="ColorSwatchWhite" Width="18" Height="18" CornerRadius="9" Background="#FFFFFFFF"
+                                        BorderBrush="Transparent" BorderThickness="2" Margin="2,0" Cursor="Hand"
+                                        ToolTip="White" MouseLeftButtonDown="ColorSwatch_Click" Tag="#FFFFFFFF"/>
+
+                                <Border Width="1" Height="16" Background="{DynamicResource Brush.Border}" Margin="5,0"/>
+
+                                <!-- Undo & Clear -->
+                                <Button Style="{StaticResource MiniToolbarBtnStyle}" Click="AnnotateUndo_Click" ToolTip="Undo last annotation (Ctrl+Z)">
+                                    <TextBlock Text="&#xE7A7;" FontFamily="Segoe MDL2 Assets" FontSize="11" Foreground="{DynamicResource Brush.TextHeading}"/>
+                                </Button>
+                                <Button Style="{StaticResource MiniToolbarBtnStyle}" Click="AnnotateClear_Click" ToolTip="Clear all annotations">
+                                    <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="11" Foreground="{DynamicResource Brush.Danger}"/>
+                                </Button>
+
+                                <Border Width="1" Height="16" Background="{DynamicResource Brush.Border}" Margin="4,0"/>
+
+                                <!-- Done button -->
+                                <Button Style="{StaticResource MiniToolbarBtnStyle}" Click="AnnotateDone_Click" ToolTip="Done / Close toolbar (Esc)">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="11" Foreground="{DynamicResource Brush.Accent}" Margin="0,0,4,0"/>
+                                        <TextBlock Text="Done" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Accent}"/>
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </Border>
                     </Grid>
             </Border>
         </Grid>

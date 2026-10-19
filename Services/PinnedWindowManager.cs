@@ -34,6 +34,8 @@ namespace AdvancedSnip.Services
         public bool FlipHorizontal { get; set; } = false;
         public bool FlipVertical { get; set; } = false;
         public bool IsSlappedToDesktop { get; set; } = false;
+        public string? HyperlinksJson { get; set; }
+        public string? AnnotationsJson { get; set; }
     }
 
     /// <summary>

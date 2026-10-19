@@ -16,6 +16,8 @@ namespace AdvancedSnip.Services
         public required System.Windows.Rect Box { get; init; }
         /// <summary>Index of the line this belongs to, for whole-line selection.</summary>
         public required int Line { get; init; }
+        /// <summary>Identified hyperlink destination if this word is a clickable URL.</summary>
+        public string? Url { get; set; }
     }
 
     /// <summary>
@@ -220,7 +222,18 @@ namespace AdvancedSnip.Services
                 {
                     if (_resolved) return _engine;
                     _resolved = true;
-                    try { _engine = OcrEngine.TryCreateFromUserProfileLanguages(); }
+                    try
+                    {
+                        var usLang = new Windows.Globalization.Language("en-US");
+                        if (OcrEngine.IsLanguageSupported(usLang))
+                        {
+                            _engine = OcrEngine.TryCreateFromLanguage(usLang);
+                        }
+                        if (_engine == null)
+                        {
+                            _engine = OcrEngine.TryCreateFromUserProfileLanguages();
+                        }
+                    }
                     catch { _engine = null; }
                     return _engine;
                 }
@@ -327,7 +340,7 @@ namespace AdvancedSnip.Services
                 if (!string.IsNullOrWhiteSpace(result?.Text))
                 {
                     if (text.Length > 0) text.Append('\n');
-                    text.Append(result!.Text);
+                    text.Append(NormalizeOcrText(result!.Text));
                 }
 
                 if (y + height >= scaledH) break;   // that band reached the bottom
@@ -385,14 +398,11 @@ namespace AdvancedSnip.Services
         }
 
         /// <summary>
-        /// The banded read. Runs on a worker thread.
+        /// The banded and tiled read. Runs on a worker thread.
         ///
-        /// A tall capture is cut into horizontal bands that each fit inside the engine's
-        /// size limit and recognised at **full resolution**. The obvious alternative —
-        /// scaling the whole thing down to fit — is what the code used to do, and it is
-        /// worse in both directions: a 20,000-pixel page is halved, so the text is halved,
-        /// and the engine that could have read it comfortably starts guessing. Bands keep
-        /// every pixel and cost only the seam handling below.
+        /// Captures are partitioned into overlapping tiles of ~1050px. This allows
+        /// DecodeForOcrAsync to upscale each tile by 2.4x to 3.5x within the engine's 2600px limit,
+        /// ensuring small UI glyphs, numbers, and symbols are rendered large enough for high-accuracy recognition.
         /// </summary>
         private static async Task<OcrLayout> ReadLayoutBandedAsync(
             System.Windows.Media.Imaging.BitmapSource image, CancellationToken ct,
@@ -403,105 +413,125 @@ namespace AdvancedSnip.Services
 
             int width = image.PixelWidth;
             int height = image.PixelHeight;
-            int limit = (int)OcrEngine.MaxImageDimension;
+            if (width <= 0 || height <= 0) return new OcrLayout();
 
-            // Width is the one dimension bands cannot help with, so an unusually wide image
-            // still gets scaled. In practice this never fires: captures are tall, not wide.
-            double widthScale = width > limit ? (double)limit / width : 1.0;
+            const int TileSize = 1050;
+            const int Overlap = 180;
 
-            int bandHeight = (int)(limit / Math.Max(0.01, widthScale));
-            // Overlap so a line of text sitting across a seam is fully inside at least one
-            // band. 240 pixels is several lines at any reasonable font size.
-            const int Overlap = 240;
-
-            if (height <= bandHeight)
+            if (width <= 1100 && height <= 1100)
             {
                 var single = await RecogniseRegionAsync(engine, image,
-                    new System.Windows.Int32Rect(0, 0, width, height), widthScale, 0, ct);
+                    new System.Windows.Int32Rect(0, 0, width, height), 0, 0, ct);
                 progress?.Report(1);
                 return single;
             }
 
+            int cols = width <= 1100 ? 1 : (int)Math.Ceiling((double)(width - Overlap) / (TileSize - Overlap));
+            int rows = height <= 1100 ? 1 : (int)Math.Ceiling((double)(height - Overlap) / (TileSize - Overlap));
+            int totalTiles = cols * rows;
+            int completedTiles = 0;
+
             var layout = new OcrLayout();
             var text = new System.Text.StringBuilder();
-            int lineOffset = 0;
 
-            // Where the previous band stopped contributing words, so the seam is not
-            // recognised twice.
-            double claimedTo = 0;
-
-            int step = Math.Max(1, bandHeight - Overlap);
-            int bands = (int)Math.Ceiling((double)height / step);
-            int done = 0;
-
-            for (int top = 0; top < height; top += step)
+            double claimedX = 0;
+            for (int c = 0; c < cols; c++)
             {
-                ct.ThrowIfCancellationRequested();
+                int tileX = c == 0 ? 0 : Math.Min(width - TileSize, c * (TileSize - Overlap));
+                if (tileX < 0) tileX = 0;
+                int tileW = Math.Min(TileSize, width - tileX);
 
-                int h = Math.Min(bandHeight, height - top);
-                if (h <= 0) break;
+                bool lastCol = (c == cols - 1) || (tileX + tileW >= width);
+                double keepFromX = claimedX;
+                double keepToX = lastCol ? double.MaxValue : tileX + tileW - (Overlap / 2.0);
 
-                var band = await RecogniseRegionAsync(engine, image,
-                    new System.Windows.Int32Rect(0, top, width, h), widthScale, top, ct);
-
-                bool lastBand = top + h >= height;
-
-                // A band's words are kept from where the previous band left off up to the
-                // start of the next band's overlap — so every word comes from exactly one
-                // band, and from the band that saw the most context around it.
-                double keepFrom = claimedTo;
-                double keepTo = lastBand ? double.MaxValue : top + h - Overlap / 2.0;
-
-                int lastLine = -1;
-                foreach (var word in band.Words)
+                double claimedY = 0;
+                for (int r = 0; r < rows; r++)
                 {
-                    double centre = word.Box.Y + word.Box.Height / 2;
-                    if (centre < keepFrom || centre >= keepTo) continue;
+                    ct.ThrowIfCancellationRequested();
 
-                    if (word.Line != lastLine)
+                    int tileY = r == 0 ? 0 : Math.Min(height - TileSize, r * (TileSize - Overlap));
+                    if (tileY < 0) tileY = 0;
+                    int tileH = Math.Min(TileSize, height - tileY);
+
+                    bool lastRow = (r == rows - 1) || (tileY + tileH >= height);
+                    double keepFromY = claimedY;
+                    double keepToY = lastRow ? double.MaxValue : tileY + tileH - (Overlap / 2.0);
+
+                    var region = new System.Windows.Int32Rect(tileX, tileY, tileW, tileH);
+                    var tile = await RecogniseRegionAsync(engine, image, region, tileX, tileY, ct);
+
+                    foreach (var word in tile.Words)
                     {
-                        if (lastLine >= 0) text.Append('\n');
-                        lastLine = word.Line;
-                        lineOffset++;
+                        double centreX = word.Box.X + word.Box.Width / 2.0;
+                        double centreY = word.Box.Y + word.Box.Height / 2.0;
+
+                        if (centreX >= keepFromX && centreX < keepToX &&
+                            centreY >= keepFromY && centreY < keepToY)
+                        {
+                            layout.Words.Add(word);
+                        }
                     }
-                    else text.Append(' ');
 
-                    text.Append(word.Text);
+                    claimedY = keepToY;
+                    completedTiles++;
+                    progress?.Report(Math.Clamp((double)completedTiles / Math.Max(1, totalTiles), 0, 1));
 
-                    layout.Words.Add(new OcrWord
-                    {
-                        Text = word.Text,
-                        // Lines are renumbered across bands, or double-clicking a line in
-                        // band three would select a line in band one that shares its index.
-                        Line = lineOffset,
-                        Box = word.Box
-                    });
+                    if (lastRow) break;
                 }
 
-                claimedTo = keepTo;
-                done++;
-                progress?.Report(Math.Clamp(done / (double)Math.Max(1, bands), 0, 1));
+                claimedX = keepToX;
+                if (lastCol) break;
+            }
 
-                if (lastBand) break;
+            // Sort words in reading order (lines top-to-bottom, words left-to-right)
+            layout.Words.Sort((a, b) =>
+            {
+                double diffY = a.Box.Y - b.Box.Y;
+                double avgH = Math.Max(10, (a.Box.Height + b.Box.Height) / 2.0);
+                if (Math.Abs(diffY) > avgH * 0.45) return a.Box.Y.CompareTo(b.Box.Y);
+                return a.Box.X.CompareTo(b.Box.X);
+            });
+
+            // Reconstruct reading lines and full text
+            int currentLine = 0;
+            double lastLineBottom = -1;
+            for (int i = 0; i < layout.Words.Count; i++)
+            {
+                var w = layout.Words[i];
+                double baseline = w.Box.Y + w.Box.Height * 0.75;
+                if (lastLineBottom < 0 || Math.Abs(baseline - lastLineBottom) > Math.Max(8, w.Box.Height * 0.55))
+                {
+                    if (lastLineBottom >= 0) text.Append('\n');
+                    currentLine++;
+                    lastLineBottom = baseline;
+                }
+                else if (i > 0)
+                {
+                    text.Append(' ');
+                }
+
+                layout.Words[i] = new OcrWord
+                {
+                    Text = w.Text,
+                    Box = w.Box,
+                    Line = currentLine,
+                    Url = w.Url
+                };
+                text.Append(w.Text);
             }
 
             layout.Text = text.ToString();
+            DetectUrls(layout.Words);
             return layout;
         }
 
         /// <summary>
         /// Recognises one rectangle of an image, returning boxes in whole-image coordinates.
-        ///
-        /// Each band is written to its own small temp PNG. That looks wasteful next to one
-        /// big encode, and is the opposite: the peak memory is one band rather than the
-        /// whole picture, and no single operation is long enough to matter. The file route
-        /// itself is the same deliberate choice made throughout this class — StorageFile is
-        /// core WinRT and always present, where the in-memory route needs interop
-        /// extensions whose availability varies.
         /// </summary>
         private static async Task<OcrLayout> RecogniseRegionAsync(
             OcrEngine engine, System.Windows.Media.Imaging.BitmapSource image,
-            System.Windows.Int32Rect region, double scale, int yOffset, CancellationToken ct)
+            System.Windows.Int32Rect region, int xOffset, int yOffset, CancellationToken ct)
         {
             string temp = Path.Combine(Path.GetTempPath(),
                 $"advsnip_ocr_{Guid.NewGuid():N}.png");
@@ -510,8 +540,6 @@ namespace AdvancedSnip.Services
             {
                 ct.ThrowIfCancellationRequested();
 
-                // CroppedBitmap is a view onto the source, not a copy, so this costs
-                // nothing until the encoder pulls pixels through it.
                 System.Windows.Media.Imaging.BitmapSource slice = image;
                 if (region.X != 0 || region.Y != 0
                     || region.Width != image.PixelWidth || region.Height != image.PixelHeight)
@@ -527,17 +555,17 @@ namespace AdvancedSnip.Services
 
                 var raw = await ReadLayoutFileAsync(temp, ct);
 
-                if (yOffset == 0 && Math.Abs(scale - 1.0) < 0.0001) return raw;
+                if (xOffset == 0 && yOffset == 0) return raw;
 
-                // Boxes come back relative to the band. Put them back where they belong.
                 var shifted = new OcrLayout { Text = raw.Text };
                 foreach (var w in raw.Words)
                     shifted.Words.Add(new OcrWord
                     {
                         Text = w.Text,
                         Line = w.Line,
-                        Box = new System.Windows.Rect(w.Box.X, w.Box.Y + yOffset,
-                                                      w.Box.Width, w.Box.Height)
+                        Box = new System.Windows.Rect(w.Box.X + xOffset, w.Box.Y + yOffset,
+                                                      w.Box.Width, w.Box.Height),
+                        Url = w.Url
                     });
                 return shifted;
             }
@@ -569,9 +597,6 @@ namespace AdvancedSnip.Services
                 ct.ThrowIfCancellationRequested();
                 var result = await engine.RecognizeAsync(bitmap);
 
-                // Boxes come back in the coordinates of whatever was fed to the engine.
-                // If the image was scaled down to fit the size limit, they have to be
-                // scaled back or every highlight lands in the wrong place.
                 double back = prepared.Scale <= 0 ? 1.0 : 1.0 / prepared.Scale;
 
                 var layout = new OcrLayout { Text = result?.Text ?? "" };
@@ -583,9 +608,10 @@ namespace AdvancedSnip.Services
                     foreach (var word in line.Words)
                     {
                         var r = word.BoundingRect;
+                        string text = NormalizeOcrText(word.Text);
                         layout.Words.Add(new OcrWord
                         {
-                            Text = word.Text,
+                            Text = text,
                             Line = lineIndex,
                             Box  = new System.Windows.Rect(
                                 r.X * back, r.Y * back, r.Width * back, r.Height * back)
@@ -593,10 +619,88 @@ namespace AdvancedSnip.Services
                     }
                     lineIndex++;
                 }
+
+                DetectUrls(layout.Words);
                 return layout;
             }
             catch (OperationCanceledException) { throw; }
             catch { return new OcrLayout(); }
+        }
+
+        /// <summary>
+        /// Normalizes OCR text quirks on screenshots (e.g. slashed zeros in monospace fonts recognized as ø/Ø).
+        /// </summary>
+        private static string NormalizeOcrText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+
+            // 1. Slashed zero (ø / Ø) replacement in numeric or isolated context
+            // e.g. "294ø" -> "2940", "ø.8" -> "0.8", "3øøø" -> "3000", "ø.ø" -> "0.0", "ø%" -> "0%", "10:øø" -> "10:00"
+            if (text.Contains('ø') || text.Contains('Ø'))
+            {
+                if (System.Text.RegularExpressions.Regex.IsMatch(text, @"^[\$€£¥\(\[\{]?[øØ\d\.,:\-%/]+[\)\]\}%]?$"))
+                {
+                    text = text.Replace('ø', '0').Replace('Ø', '0');
+                }
+            }
+
+            // 2. Trailing 'a' in decimal numbers e.g. "345.9a" -> "345.90"
+            if (System.Text.RegularExpressions.Regex.IsMatch(text, @"^\d+\.\d+[aA]$"))
+            {
+                text = text[..^1] + "0";
+            }
+
+            return text;
+        }
+
+        private static readonly System.Text.RegularExpressions.Regex UrlPattern = new(
+            @"^(?:https?:\/\/|www\.)[^\s<>""]+|[a-zA-Z0-9.-]+\.(?:com|org|net|edu|gov|io|ai|dev|app|co|uk|de|in|me|info|biz)(?:\/[^\s<>""]*)?$",
+            System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        private static void DetectUrls(List<OcrWord> words)
+        {
+            if (words.Count == 0) return;
+
+            for (int i = 0; i < words.Count; i++)
+            {
+                var w = words[i];
+                string candidate = CleanUrlPunctuation(w.Text);
+                if (UrlPattern.IsMatch(candidate))
+                {
+                    w.Url = NormalizeUrl(candidate);
+                    continue;
+                }
+
+                // Check two adjacent words on the same line (e.g. "https://" and "github.com/...")
+                if (i + 1 < words.Count && words[i + 1].Line == w.Line)
+                {
+                    string pair = CleanUrlPunctuation(w.Text + words[i + 1].Text);
+                    if (UrlPattern.IsMatch(pair))
+                    {
+                        string fullUrl = NormalizeUrl(pair);
+                        w.Url = fullUrl;
+                        words[i + 1].Url = fullUrl;
+                        i++; // skip next word
+                    }
+                }
+            }
+        }
+
+        private static string CleanUrlPunctuation(string str)
+        {
+            if (string.IsNullOrEmpty(str)) return "";
+            return str.Trim().TrimEnd('.', ',', ';', ':', '!', '?', ')', ']', '}', '"', '\'').TrimStart('(', '[', '{', '"', '\'');
+        }
+
+        private static string NormalizeUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return url;
+            if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                return url;
+            }
+            return "https://" + url;
         }
 
         /// <summary>

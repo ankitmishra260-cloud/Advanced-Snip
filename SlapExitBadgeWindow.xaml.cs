@@ -102,10 +102,6 @@ namespace AdvancedSnip
             ToastWindow.Show("Image Copied", "Pinned screenshot copied to clipboard.");
         }
 
-        private async void Ocr_Click(object sender, RoutedEventArgs e)
-        {
-            await _targetWindow.ExtractTextToClipboardAsync();
-        }
 
         private void Opacity100_Click(object sender, RoutedEventArgs e) => _targetWindow.SetImageOpacity(1.0);
         private void Opacity75_Click(object sender, RoutedEventArgs e)  => _targetWindow.SetImageOpacity(0.75);

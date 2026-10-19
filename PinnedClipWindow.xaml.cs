@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -15,6 +17,37 @@ using AdvancedSnip.Services;
 
 namespace AdvancedSnip
 {
+    public enum AnnotationType
+    {
+        Arrow,
+        Circle,
+        Text,
+        Hyperlink
+    }
+
+    public class AnnotationItem
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+        public AnnotationType Type { get; set; }
+        public double StartX { get; set; }
+        public double StartY { get; set; }
+        public double EndX { get; set; }
+        public double EndY { get; set; }
+        public string ColorHex { get; set; } = "#FFFF4D4F";
+        public double StrokeThickness { get; set; } = 3.0;
+        public string? Text { get; set; }
+        public string? Url { get; set; }
+        public string? Label { get; set; }
+    }
+
+    public enum AnnotateTool
+    {
+        Select,
+        Arrow,
+        Circle,
+        Text,
+        Hyperlink
+    }
     /// <summary>
     /// An always-on-top / desktop-pinnable draggable floating window for a screenshot.
     ///
@@ -29,8 +62,12 @@ namespace AdvancedSnip
     {
         private static readonly Brush WordPlainBrush = FreezeBrush(new SolidColorBrush(Color.FromArgb(0x22, 0x3B, 0x82, 0xF6)));
         private static readonly Brush WordPlainBorderBrush = FreezeBrush(new SolidColorBrush(Color.FromArgb(0x55, 0x3B, 0x82, 0xF6)));
+        private static readonly Brush WordLinkBrush = FreezeBrush(new SolidColorBrush(Color.FromArgb(0x35, 0x00, 0xD2, 0xFF)));
+        private static readonly Brush WordLinkBorderBrush = FreezeBrush(new SolidColorBrush(Color.FromArgb(0xD0, 0x00, 0xD2, 0xFF)));
         private static readonly Brush WordSelectedBrush = FreezeBrush(new SolidColorBrush(Color.FromArgb(0x80, 0xF5, 0x9E, 0x0B)));
         private static readonly Brush WordSelectedBorderBrush = FreezeBrush(new SolidColorBrush(Color.FromArgb(0xFF, 0xF5, 0x9E, 0x0B)));
+        private static readonly Brush WordLinkSelectedBrush = FreezeBrush(new SolidColorBrush(Color.FromArgb(0x90, 0x00, 0xD2, 0xFF)));
+        private static readonly Brush WordLinkSelectedBorderBrush = FreezeBrush(new SolidColorBrush(Color.FromArgb(0xFF, 0x00, 0xD2, 0xFF)));
 
         private static Brush FreezeBrush(Brush brush) { brush.Freeze(); return brush; }
 
@@ -46,6 +83,27 @@ namespace AdvancedSnip
         private int _ocrSelFrom = -1;
         private int _ocrSelTo = -1;
         private readonly List<System.Windows.Shapes.Rectangle> _ocrWordBoxes = new();
+        private bool _wasSlappedBeforeOcr = false;
+        private Point _ocrMouseDownPt;
+        private int _ocrMouseDownWordIdx = -1;
+        private string? _detectedSelectedUrl = null;
+
+        // Annotations and Hyperlinks state (Normal Mode only)
+        private readonly List<AnnotationItem> _annotations = new();
+        private readonly List<AnnotationItem> _hyperlinks = new();
+        private bool _isAnnotateModeActive = false;
+        private AnnotateTool _currentAnnotateTool = AnnotateTool.Arrow;
+        private string _activeAnnotateColor = "#FFFF4D4F";
+        private double _activeAnnotateThickness = 3.0;
+        private bool _isAnnotateDrawing = false;
+        private Point _annotateDrawStart;
+        private Point _annotateDrawStartImg;
+        private Point _annotateTextClickImg;
+        private Border? _draggedLinkBorder;
+        private AnnotationItem? _draggedLinkItem;
+        private Point _draggedLinkStartMouse;
+        private Point _draggedLinkStartPos;
+        private bool _isDraggingLink = false;
 
         public PinnedItemRecord Record { get; private set; }
         public bool IsDesktopPinned { get; private set; } = false;
@@ -152,6 +210,9 @@ namespace AdvancedSnip
                 {
                     ZoomResetBtn.Visibility = Math.Abs(_zoomFactor - 1.0) > 0.01 ? Visibility.Visible : Visibility.Collapsed;
                 }
+
+                LoadAnnotationsFromRecord();
+                RelayoutAnnotations();
             };
 
             Closed += (_, _) =>
@@ -558,9 +619,9 @@ namespace AdvancedSnip
                 if (btn != null) return;
             }
 
-            if (_isOcrModeActive)
+            if (_isOcrModeActive || _isAnnotateModeActive)
             {
-                // In OCR mode, clicking on the image selects text, so only allow dragging from HeaderCard
+                // In OCR or Annotate mode, clicking on the image interacts with tools, so only allow dragging from HeaderCard
                 if (e.OriginalSource is DependencyObject depObj && !IsDescendantOf(depObj, HeaderCard))
                     return;
             }
@@ -613,6 +674,7 @@ namespace AdvancedSnip
             {
                 RelayoutOcrWordBoxes();
             }
+            RelayoutAnnotations();
             PinnedWindowManager.CheckOverlaps();
         }
 
@@ -921,6 +983,13 @@ namespace AdvancedSnip
 
             if (on)
             {
+                if (_isAnnotateModeActive)
+                {
+                    ExitAnnotateMode();
+                }
+                if (AnnotateBtn != null) AnnotateBtn.Visibility = Visibility.Collapsed;
+                if (ContextAnnotateHeader != null) ContextAnnotateHeader.Visibility = Visibility.Collapsed;
+
                 _wasFramelessBeforeSlap = IsFrameless;
                 _wasTopmostBeforeSlap = IsTopmost;
 
@@ -1022,6 +1091,10 @@ namespace AdvancedSnip
 
                 if (ContextSlap != null) ContextSlap.IsChecked = false;
 
+                if (AnnotateBtn != null) AnnotateBtn.Visibility = Visibility.Visible;
+                if (ContextAnnotateHeader != null) ContextAnnotateHeader.Visibility = Visibility.Visible;
+                RelayoutAnnotations();
+
                 BringToTop();
                 Activate();
             }
@@ -1086,7 +1159,17 @@ namespace AdvancedSnip
             try
             {
                 System.Drawing.Bitmap? bmp = null;
-                if (!string.IsNullOrEmpty(Record?.CachedImagePath) && File.Exists(Record.CachedImagePath))
+                if (_annotations.Count > 0 || _hyperlinks.Count > 0)
+                {
+                    var annotated = GetAnnotatedImageBitmap();
+                    using var ms = new MemoryStream();
+                    var encoder = new PngBitmapEncoder();
+                    encoder.Frames.Add(BitmapFrame.Create(annotated));
+                    encoder.Save(ms);
+                    ms.Position = 0;
+                    bmp = new System.Drawing.Bitmap(ms);
+                }
+                else if (!string.IsNullOrEmpty(Record?.CachedImagePath) && File.Exists(Record.CachedImagePath))
                 {
                     using var stream = new FileStream(Record.CachedImagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                     bmp = new System.Drawing.Bitmap(stream);
@@ -1208,14 +1291,15 @@ namespace AdvancedSnip
 
         public void CopyImageToClipboard()
         {
-            string? path = _filePath ?? Record?.CachedImagePath;
+            var src = (_annotations.Count > 0 || _hyperlinks.Count > 0) ? GetAnnotatedImageBitmap() : _imageSource;
+            string? path = (_annotations.Count > 0 || _hyperlinks.Count > 0) ? null : (_filePath ?? Record?.CachedImagePath);
             if (Application.Current is App app)
             {
-                app.CopyImage(_imageSource, path);
+                app.CopyImage(src, path);
             }
             else
             {
-                ClipboardService.SetImage(_imageSource, path);
+                ClipboardService.SetImage(src, path);
             }
 
             if (CopyStatusText != null)
@@ -1290,7 +1374,8 @@ namespace AdvancedSnip
                 {
                     using var stream = new FileStream(dlg.FileName, FileMode.Create);
                     var encoder = new PngBitmapEncoder();
-                    encoder.Frames.Add(BitmapFrame.Create(_imageSource));
+                    var src = (_annotations.Count > 0 || _hyperlinks.Count > 0) ? GetAnnotatedImageBitmap() : _imageSource;
+                    encoder.Frames.Add(BitmapFrame.Create(src));
                     encoder.Save(stream);
                     ToastWindow.Show("Image Saved", Path.GetFileName(dlg.FileName));
                 }
@@ -1330,6 +1415,7 @@ namespace AdvancedSnip
             {
                 RelayoutOcrWordBoxes();
             }
+            RelayoutAnnotations();
 
             if (Record != null)
             {
@@ -1376,8 +1462,19 @@ namespace AdvancedSnip
 
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
         {
+            if (AnnotationInputBox != null && AnnotationInputBox.IsFocused)
+            {
+                return;
+            }
+
             if (e.Key == Key.Escape)
             {
+                if (_isAnnotateModeActive)
+                {
+                    ExitAnnotateMode();
+                    e.Handled = true;
+                    return;
+                }
                 if (_isOcrModeActive)
                 {
                     ExitOcrMode();
@@ -1387,6 +1484,42 @@ namespace AdvancedSnip
                 e.Handled = true;
                 Unpin_Click(sender, e);
                 return;
+            }
+
+            if (_isAnnotateModeActive && Keyboard.Modifiers == ModifierKeys.None)
+            {
+                if (e.Key == Key.A)
+                {
+                    e.Handled = true;
+                    _currentAnnotateTool = AnnotateTool.Arrow;
+                    SyncToolbarRadios();
+                    UpdateToolCursor();
+                    return;
+                }
+                if (e.Key == Key.C)
+                {
+                    e.Handled = true;
+                    _currentAnnotateTool = AnnotateTool.Circle;
+                    SyncToolbarRadios();
+                    UpdateToolCursor();
+                    return;
+                }
+                if (e.Key == Key.T)
+                {
+                    e.Handled = true;
+                    _currentAnnotateTool = AnnotateTool.Text;
+                    SyncToolbarRadios();
+                    UpdateToolCursor();
+                    return;
+                }
+                if (e.Key == Key.L)
+                {
+                    e.Handled = true;
+                    _currentAnnotateTool = AnnotateTool.Hyperlink;
+                    SyncToolbarRadios();
+                    UpdateToolCursor();
+                    return;
+                }
             }
 
             if (e.Key == Key.T && !Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
@@ -1488,6 +1621,20 @@ namespace AdvancedSnip
                         Copy_Click(sender, e);
                         return;
 
+                    case Key.E:
+                        e.Handled = true;
+                        ToggleAnnotateMode();
+                        return;
+
+                    case Key.Z:
+                        if (_isAnnotateModeActive || _annotations.Count > 0 || _hyperlinks.Count > 0)
+                        {
+                            e.Handled = true;
+                            AnnotateUndo_Click(sender, e);
+                            return;
+                        }
+                        break;
+
                     case Key.O:
                         e.Handled = true;
                         if (_isOcrModeActive) ExitOcrMode();
@@ -1576,6 +1723,7 @@ namespace AdvancedSnip
             {
                 RelayoutOcrWordBoxes();
             }
+            RelayoutAnnotations();
 
             if (Record != null)
             {
@@ -1809,11 +1957,31 @@ namespace AdvancedSnip
                 OcrFlipScale.ScaleX = CurrentFlipH ? -1.0 : 1.0;
                 OcrFlipScale.ScaleY = CurrentFlipV ? -1.0 : 1.0;
             }
+            if (AnnotationRotate != null)
+            {
+                AnnotationRotate.Angle = CurrentRotation;
+            }
+            if (AnnotationFlipScale != null)
+            {
+                AnnotationFlipScale.ScaleX = CurrentFlipH ? -1.0 : 1.0;
+                AnnotationFlipScale.ScaleY = CurrentFlipV ? -1.0 : 1.0;
+            }
+            if (HyperlinkRotate != null)
+            {
+                HyperlinkRotate.Angle = CurrentRotation;
+            }
+            if (HyperlinkFlipScale != null)
+            {
+                HyperlinkFlipScale.ScaleX = CurrentFlipH ? -1.0 : 1.0;
+                HyperlinkFlipScale.ScaleY = CurrentFlipV ? -1.0 : 1.0;
+            }
             if (ImageScale != null)
             {
                 ImageScale.ScaleX = _zoomFactor;
                 ImageScale.ScaleY = _zoomFactor;
             }
+
+            RelayoutAnnotations();
 
             if (Record != null)
             {
@@ -1892,6 +2060,25 @@ namespace AdvancedSnip
         {
             if (_isOcrModeActive) return;
 
+            if (IsSlappedToDesktop)
+            {
+                _wasSlappedBeforeOcr = true;
+                var currentRect = WindowPlacement.GetPhysicalRect(this);
+                if (currentRect.IsEmpty && Record != null)
+                {
+                    currentRect = new System.Drawing.Rectangle((int)Record.X, (int)Record.Y, (int)Record.Width, (int)Record.Height);
+                }
+                if (!currentRect.IsEmpty)
+                {
+                    WindowPlacement.SetBounds(this, currentRect, topMost: true);
+                }
+                Visibility = Visibility.Visible;
+                Topmost = true;
+                Show();
+                BringToTop();
+                Activate();
+            }
+
             if (CopyStatusText != null) CopyStatusText.Text = "Scanning text...";
 
             try
@@ -1905,12 +2092,19 @@ namespace AdvancedSnip
                 {
                     if (CopyStatusText != null) CopyStatusText.Text = "No text found";
                     ToastWindow.Show("OCR", "No readable text or numbers detected in this image.");
+                    if (_wasSlappedBeforeOcr || IsSlappedToDesktop)
+                    {
+                        _wasSlappedBeforeOcr = false;
+                        Visibility = Visibility.Collapsed;
+                        Topmost = false;
+                    }
                     return;
                 }
 
                 _isOcrModeActive = true;
                 _isOcrSelecting = false;
                 _ocrSelFrom = _ocrSelTo = -1;
+                _detectedSelectedUrl = null;
 
                 if (OcrTextCanvas != null) OcrTextCanvas.Visibility = Visibility.Visible;
                 if (OcrInteractionLayer != null) OcrInteractionLayer.Visibility = Visibility.Visible;
@@ -1928,6 +2122,12 @@ namespace AdvancedSnip
             catch (Exception ex)
             {
                 _isOcrModeActive = false;
+                if (_wasSlappedBeforeOcr || IsSlappedToDesktop)
+                {
+                    _wasSlappedBeforeOcr = false;
+                    Visibility = Visibility.Collapsed;
+                    Topmost = false;
+                }
                 ToastWindow.Show("OCR Error", ex.Message);
             }
         }
@@ -1939,6 +2139,7 @@ namespace AdvancedSnip
             _isOcrModeActive = false;
             _isOcrSelecting = false;
             _ocrSelFrom = _ocrSelTo = -1;
+            _detectedSelectedUrl = null;
 
             if (OcrTextCanvas != null)
             {
@@ -1948,6 +2149,7 @@ namespace AdvancedSnip
             if (OcrInteractionLayer != null)
             {
                 OcrInteractionLayer.Visibility = Visibility.Collapsed;
+                OcrInteractionLayer.Cursor = Cursors.IBeam;
             }
             if (OcrFloatingCopyPopup != null)
             {
@@ -1956,6 +2158,14 @@ namespace AdvancedSnip
             _ocrWordBoxes.Clear();
 
             if (CopyStatusText != null) CopyStatusText.Text = "";
+
+            if (_wasSlappedBeforeOcr || IsSlappedToDesktop)
+            {
+                _wasSlappedBeforeOcr = false;
+                Visibility = Visibility.Collapsed;
+                Topmost = false;
+                _slapBadge?.UpdatePosition();
+            }
         }
 
         private void ExitOcrMode_Click(object sender, MouseButtonEventArgs e)
@@ -1988,17 +2198,22 @@ namespace AdvancedSnip
                 double width = Math.Max(2, box.Width * scaleX);
                 double height = Math.Max(2, box.Height * scaleY);
 
+                bool isLink = !string.IsNullOrEmpty(word.Url);
                 var r = new System.Windows.Shapes.Rectangle
                 {
                     Width = width,
                     Height = height,
                     RadiusX = 2,
                     RadiusY = 2,
-                    Fill = WordPlainBrush,
-                    Stroke = WordPlainBorderBrush,
-                    StrokeThickness = 1,
+                    Fill = isLink ? WordLinkBrush : WordPlainBrush,
+                    Stroke = isLink ? WordLinkBorderBrush : WordPlainBorderBrush,
+                    StrokeThickness = isLink ? 1.5 : 1,
                     IsHitTestVisible = false
                 };
+                if (isLink)
+                {
+                    r.ToolTip = $"Click to open link:\n{word.Url}";
+                }
                 Canvas.SetLeft(r, left);
                 Canvas.SetTop(r, top);
                 OcrTextCanvas.Children.Add(r);
@@ -2016,8 +2231,19 @@ namespace AdvancedSnip
             for (int i = 0; i < _ocrWordBoxes.Count; i++)
             {
                 bool selected = (_ocrSelFrom >= 0 && i >= lo && i <= hi);
-                var targetFill = selected ? WordSelectedBrush : WordPlainBrush;
-                var targetStroke = selected ? WordSelectedBorderBrush : WordPlainBorderBrush;
+                bool isLink = _ocrLayout != null && i < _ocrLayout.Words.Count && !string.IsNullOrEmpty(_ocrLayout.Words[i].Url);
+
+                Brush targetFill, targetStroke;
+                if (selected)
+                {
+                    targetFill = isLink ? WordLinkSelectedBrush : WordSelectedBrush;
+                    targetStroke = isLink ? WordLinkSelectedBorderBrush : WordSelectedBorderBrush;
+                }
+                else
+                {
+                    targetFill = isLink ? WordLinkBrush : WordPlainBrush;
+                    targetStroke = isLink ? WordLinkBorderBrush : WordPlainBorderBrush;
+                }
 
                 if (!ReferenceEquals(_ocrWordBoxes[i].Fill, targetFill))
                     _ocrWordBoxes[i].Fill = targetFill;
@@ -2039,11 +2265,13 @@ namespace AdvancedSnip
 
             if (e.ChangedButton == MouseButton.Left && _ocrLayout != null)
             {
+                _ocrMouseDownPt = e.GetPosition(OcrInteractionLayer);
                 Point ptOnImage = e.GetPosition(PinnedImage);
                 var imgPt = OverlayPointToImage(ptOnImage);
                 if (imgPt != null)
                 {
                     int wordIdx = _ocrLayout.NearestWord(imgPt.Value);
+                    _ocrMouseDownWordIdx = wordIdx;
                     if (wordIdx >= 0)
                     {
                         _isOcrSelecting = true;
@@ -2055,6 +2283,7 @@ namespace AdvancedSnip
                     else
                     {
                         _ocrSelFrom = _ocrSelTo = -1;
+                        _ocrMouseDownWordIdx = -1;
                         PaintOcrSelection();
                         if (OcrFloatingCopyPopup != null) OcrFloatingCopyPopup.Visibility = Visibility.Collapsed;
                     }
@@ -2064,19 +2293,41 @@ namespace AdvancedSnip
 
         private void OcrLayer_MouseMove(object sender, MouseEventArgs e)
         {
-            if (!_isOcrSelecting || _ocrLayout == null) return;
-            e.Handled = true;
+            if (_ocrLayout == null) return;
 
             Point ptOnImage = e.GetPosition(PinnedImage);
             var imgPt = OverlayPointToImage(ptOnImage);
-            if (imgPt != null)
+
+            if (_isOcrSelecting)
             {
-                int wordIdx = _ocrLayout.NearestWord(imgPt.Value);
-                if (wordIdx >= 0 && wordIdx != _ocrSelTo)
+                e.Handled = true;
+                if (imgPt != null)
                 {
-                    _ocrSelTo = wordIdx;
-                    PaintOcrSelection();
+                    int wordIdx = _ocrLayout.NearestWord(imgPt.Value);
+                    if (wordIdx >= 0 && wordIdx != _ocrSelTo)
+                    {
+                        _ocrSelTo = wordIdx;
+                        PaintOcrSelection();
+                    }
                 }
+            }
+            else
+            {
+                // Dynamic cursor: if hovering directly over a recognized hyperlink box, show Hand
+                if (imgPt != null)
+                {
+                    int wordIdx = _ocrLayout.NearestWord(imgPt.Value);
+                    if (wordIdx >= 0 && !string.IsNullOrEmpty(_ocrLayout.Words[wordIdx].Url))
+                    {
+                        var b = _ocrLayout.Words[wordIdx].Box;
+                        if (b.Contains(imgPt.Value))
+                        {
+                            OcrInteractionLayer.Cursor = Cursors.Hand;
+                            return;
+                        }
+                    }
+                }
+                OcrInteractionLayer.Cursor = Cursors.IBeam;
             }
         }
 
@@ -2088,12 +2339,27 @@ namespace AdvancedSnip
                 OcrInteractionLayer.ReleaseMouseCapture();
                 e.Handled = true;
 
+                Point curPt = e.GetPosition(OcrInteractionLayer);
+                double moveDist = (curPt - _ocrMouseDownPt).Length;
+
+                // Check for single click on a hyperlink (mouse barely moved)
+                if (moveDist < 6 && _ocrMouseDownWordIdx >= 0 && _ocrLayout != null &&
+                    _ocrMouseDownWordIdx < _ocrLayout.Words.Count)
+                {
+                    var word = _ocrLayout.Words[_ocrMouseDownWordIdx];
+                    if (!string.IsNullOrEmpty(word.Url))
+                    {
+                        OpenUrlInBrowser(word.Url);
+                        return;
+                    }
+                }
+
                 if (_ocrSelFrom >= 0 && _ocrLayout != null)
                 {
                     string text = _ocrLayout.Join(_ocrSelFrom, _ocrSelTo).Trim();
                     if (!string.IsNullOrEmpty(text))
                     {
-                        Point curPt = e.GetPosition(OcrInteractionLayer);
+                        _detectedSelectedUrl = FindUrlInText(text);
                         ShowFloatingCopyAt(curPt);
                     }
                     else if (OcrFloatingCopyPopup != null)
@@ -2104,13 +2370,63 @@ namespace AdvancedSnip
             }
         }
 
+        private static string? FindUrlInText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return null;
+            var match = System.Text.RegularExpressions.Regex.Match(
+                text,
+                @"(?:https?:\/\/|www\.)[^\s<>""]+|[a-zA-Z0-9.-]+\.(?:com|org|net|edu|gov|io|ai|dev|app|co|uk|de|in|me)(?:\/[^\s<>""]*)?",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                string url = match.Value.TrimEnd('.', ',', ';', ':', '!', '?', ')', ']', '}', '"', '\'');
+                if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                    !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    url = "https://" + url;
+                }
+                return url;
+            }
+            return null;
+        }
+
+        private static void OpenUrlInBrowser(string url)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+                string displayUrl = url.Length > 50 ? url[..47] + "..." : url;
+                ToastWindow.Show("Opening Link", displayUrl);
+            }
+            catch (Exception ex)
+            {
+                ToastWindow.Show("Failed to Open Link", ex.Message);
+            }
+        }
+
+        private void OcrFloatingOpenLink_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (!string.IsNullOrEmpty(_detectedSelectedUrl))
+            {
+                OpenUrlInBrowser(_detectedSelectedUrl);
+            }
+        }
+
         private void ShowFloatingCopyAt(Point curPt)
         {
             if (OcrFloatingCopyPopup == null || OcrInteractionLayer == null) return;
 
+            if (OcrFloatingOpenLinkBtn != null)
+            {
+                OcrFloatingOpenLinkBtn.Visibility = !string.IsNullOrEmpty(_detectedSelectedUrl)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            }
+
             OcrFloatingCopyPopup.UpdateLayout();
-            double btnW = OcrFloatingCopyPopup.ActualWidth > 0 ? OcrFloatingCopyPopup.ActualWidth : 68;
-            double btnH = OcrFloatingCopyPopup.ActualHeight > 0 ? OcrFloatingCopyPopup.ActualHeight : 28;
+            double btnW = OcrFloatingCopyPopup.ActualWidth > 0 ? OcrFloatingCopyPopup.ActualWidth : 120;
+            double btnH = OcrFloatingCopyPopup.ActualHeight > 0 ? OcrFloatingCopyPopup.ActualHeight : 32;
 
             double x = curPt.X + 12;
             double y = curPt.Y - 14;
@@ -2174,5 +2490,1076 @@ namespace AdvancedSnip
 
         private void SaveAs_Click(object sender, RoutedEventArgs e)
             => SaveAs();
+
+        // ═════════════════════════════════════════════════════════════════════
+        // ── Annotations (Arrow, Circle, Text) & Interactive Hyperlink Buttons ──
+        // ═════════════════════════════════════════════════════════════════════
+
+        private void LoadAnnotationsFromRecord()
+        {
+            if (Record == null) return;
+            try
+            {
+                if (!string.IsNullOrEmpty(Record.AnnotationsJson))
+                {
+                    var items = JsonSerializer.Deserialize<List<AnnotationItem>>(Record.AnnotationsJson);
+                    if (items != null)
+                    {
+                        _annotations.Clear();
+                        _annotations.AddRange(items);
+                    }
+                }
+                if (!string.IsNullOrEmpty(Record.HyperlinksJson))
+                {
+                    var links = JsonSerializer.Deserialize<List<AnnotationItem>>(Record.HyperlinksJson);
+                    if (links != null)
+                    {
+                        _hyperlinks.Clear();
+                        _hyperlinks.AddRange(links);
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private void SaveAnnotationsToRecord()
+        {
+            if (Record == null) return;
+            try
+            {
+                Record.AnnotationsJson = _annotations.Count > 0 ? JsonSerializer.Serialize(_annotations) : null;
+                Record.HyperlinksJson = _hyperlinks.Count > 0 ? JsonSerializer.Serialize(_hyperlinks) : null;
+                PinnedWindowManager.UpdateRecord(Record);
+                _saveDebounceTimer.Stop();
+                _saveDebounceTimer.Start();
+            }
+            catch { }
+        }
+
+        public void RelayoutAnnotations()
+        {
+            if (AnnotationCanvas == null || HyperlinkCanvas == null || _imageSource == null) return;
+
+            AnnotationCanvas.Children.Clear();
+            HyperlinkCanvas.Children.Clear();
+
+            var rect = GetDisplayedImageRect();
+            if (rect.IsEmpty || rect.Width <= 0 || rect.Height <= 0) return;
+
+            double scaleX = rect.Width / _imageSource.PixelWidth;
+            double scaleY = rect.Height / _imageSource.PixelHeight;
+
+            // 1. Render Shapes (Arrow, Circle, Text)
+            foreach (var item in _annotations)
+            {
+                switch (item.Type)
+                {
+                    case AnnotationType.Arrow:
+                        RenderArrowOnCanvas(item, rect, scaleX, scaleY);
+                        break;
+                    case AnnotationType.Circle:
+                        RenderCircleOnCanvas(item, rect, scaleX, scaleY);
+                        break;
+                    case AnnotationType.Text:
+                        RenderTextOnCanvas(item, rect, scaleX, scaleY);
+                        break;
+                }
+            }
+
+            // 2. Render Interactive Hyperlink Buttons
+            foreach (var link in _hyperlinks)
+            {
+                RenderHyperlinkOnCanvas(link, rect, scaleX, scaleY);
+            }
+        }
+
+        private void RenderArrowOnCanvas(AnnotationItem item, Rect rect, double scaleX, double scaleY)
+        {
+            double x1 = rect.X + item.StartX * scaleX;
+            double y1 = rect.Y + item.StartY * scaleY;
+            double x2 = rect.X + item.EndX * scaleX;
+            double y2 = rect.Y + item.EndY * scaleY;
+
+            var brush = GetBrushFromHex(item.ColorHex);
+            double thickness = Math.Max(1.5, item.StrokeThickness * (scaleX + scaleY) / 2.0);
+
+            var path = CreateArrowPath(x1, y1, x2, y2, brush, thickness);
+            path.IsHitTestVisible = false;
+            AnnotationCanvas.Children.Add(path);
+        }
+
+        private static System.Windows.Shapes.Path CreateArrowPath(double x1, double y1, double x2, double y2, Brush brush, double thickness)
+        {
+            double dx = x2 - x1;
+            double dy = y2 - y1;
+            double len = Math.Sqrt(dx * dx + dy * dy);
+
+            var pathGeom = new PathGeometry();
+
+            if (len < 2)
+            {
+                return new System.Windows.Shapes.Path { Data = pathGeom, Stroke = brush, Fill = brush };
+            }
+
+            double ux = dx / len;
+            double uy = dy / len;
+            double px = -uy;
+            double py = ux;
+
+            double headLen = Math.Min(thickness * 4.2 + 8, len * 0.45);
+            double headWidth = headLen * 0.55;
+
+            double bx = x2 - ux * headLen;
+            double by = y2 - uy * headLen;
+
+            double w1x = bx + px * headWidth;
+            double w1y = by + py * headWidth;
+            double w2x = bx - px * headWidth;
+            double w2y = by - py * headWidth;
+
+            // Shaft line
+            var shaftFig = new PathFigure { StartPoint = new Point(x1, y1), IsClosed = false };
+            shaftFig.Segments.Add(new LineSegment(new Point(bx, by), true));
+            pathGeom.Figures.Add(shaftFig);
+
+            // Arrowhead polygon
+            var headFig = new PathFigure { StartPoint = new Point(x2, y2), IsClosed = true, IsFilled = true };
+            headFig.Segments.Add(new LineSegment(new Point(w1x, w1y), true));
+            headFig.Segments.Add(new LineSegment(new Point(w2x, w2y), true));
+            pathGeom.Figures.Add(headFig);
+
+            return new System.Windows.Shapes.Path
+            {
+                Data = pathGeom,
+                Stroke = brush,
+                Fill = brush,
+                StrokeThickness = thickness,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                StrokeLineJoin = PenLineJoin.Round
+            };
+        }
+
+        private void RenderCircleOnCanvas(AnnotationItem item, Rect rect, double scaleX, double scaleY)
+        {
+            double x1 = rect.X + item.StartX * scaleX;
+            double y1 = rect.Y + item.StartY * scaleY;
+            double x2 = rect.X + item.EndX * scaleX;
+            double y2 = rect.Y + item.EndY * scaleY;
+
+            double minX = Math.Min(x1, x2);
+            double minY = Math.Min(y1, y2);
+            double w = Math.Max(2, Math.Abs(x2 - x1));
+            double h = Math.Max(2, Math.Abs(y2 - y1));
+
+            var brush = GetBrushFromHex(item.ColorHex);
+            double thickness = Math.Max(1.5, item.StrokeThickness * (scaleX + scaleY) / 2.0);
+
+            var ellipse = new System.Windows.Shapes.Ellipse
+            {
+                Width = w,
+                Height = h,
+                Stroke = brush,
+                StrokeThickness = thickness,
+                Fill = Brushes.Transparent,
+                IsHitTestVisible = false
+            };
+            Canvas.SetLeft(ellipse, minX);
+            Canvas.SetTop(ellipse, minY);
+            AnnotationCanvas.Children.Add(ellipse);
+        }
+
+        private void RenderTextOnCanvas(AnnotationItem item, Rect rect, double scaleX, double scaleY)
+        {
+            double x = rect.X + item.StartX * scaleX;
+            double y = rect.Y + item.StartY * scaleY;
+
+            var brush = GetBrushFromHex(item.ColorHex);
+
+            var border = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(220, 16, 20, 32)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(90, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(6, 2, 6, 2),
+                IsHitTestVisible = false
+            };
+            border.Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                BlurRadius = 8,
+                ShadowDepth = 2,
+                Opacity = 0.6,
+                Color = Colors.Black
+            };
+
+            var tb = new TextBlock
+            {
+                Text = item.Text ?? "",
+                FontSize = 12.5,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = brush
+            };
+            border.Child = tb;
+
+            Canvas.SetLeft(border, x);
+            Canvas.SetTop(border, y);
+            AnnotationCanvas.Children.Add(border);
+        }
+
+        private void RenderHyperlinkOnCanvas(AnnotationItem link, Rect rect, double scaleX, double scaleY)
+        {
+            double x = rect.X + link.StartX * scaleX;
+            double y = rect.Y + link.StartY * scaleY;
+
+            var border = new Border
+            {
+                Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#DD121724")),
+                BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#6000D2FF")),
+                BorderThickness = new Thickness(1.2),
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(8, 3, 6, 3),
+                Cursor = Cursors.Hand,
+                Tag = link,
+                ToolTip = $"URL: {link.Url}\n• Left-Click: Open website in default browser\n• Drag: Move button position\n• Right-Click: Context menu"
+            };
+            border.Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                BlurRadius = 10,
+                ShadowDepth = 2,
+                Opacity = 0.6,
+                Color = Colors.Black
+            };
+
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+
+            // Link glyph
+            var icon = new TextBlock
+            {
+                Text = "\uE71B",
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = 11,
+                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FF00D2FF")),
+                Margin = new Thickness(0, 0, 5, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            sp.Children.Add(icon);
+
+            // Label text
+            var label = new TextBlock
+            {
+                Text = string.IsNullOrEmpty(link.Label) ? link.Url ?? "Link" : link.Label,
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("Brush.TextHeading"),
+                VerticalAlignment = VerticalAlignment.Center,
+                MaxWidth = 180,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            sp.Children.Add(label);
+
+            // Launch arrow glyph
+            var extIcon = new TextBlock
+            {
+                Text = " \u2197",
+                FontSize = 11,
+                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#8000D2FF")),
+                Margin = new Thickness(2, 0, 4, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            sp.Children.Add(extIcon);
+
+            // Hover delete button
+            var delBtn = new Border
+            {
+                Width = 14,
+                Height = 14,
+                CornerRadius = new CornerRadius(7),
+                Background = Brushes.Transparent,
+                Margin = new Thickness(2, 0, 0, 0),
+                Cursor = Cursors.Hand,
+                Visibility = Visibility.Collapsed,
+                ToolTip = "Delete this link button",
+                Child = new TextBlock
+                {
+                    Text = "\uE711",
+                    FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                    FontSize = 8,
+                    Foreground = (Brush)FindResource("Brush.Danger"),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            };
+            delBtn.MouseLeftButtonDown += (s, e) =>
+            {
+                e.Handled = true;
+                _hyperlinks.Remove(link);
+                SaveAnnotationsToRecord();
+                RelayoutAnnotations();
+                ToastWindow.Show("Link Removed", $"Removed link to {link.Url}");
+            };
+            sp.Children.Add(delBtn);
+
+            border.Child = sp;
+
+            // Hover interactions
+            border.MouseEnter += (s, e) =>
+            {
+                border.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F2161E30"));
+                border.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FF00D2FF"));
+                delBtn.Visibility = Visibility.Visible;
+            };
+            border.MouseLeave += (s, e) =>
+            {
+                border.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#DD121724"));
+                border.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#6000D2FF"));
+                delBtn.Visibility = Visibility.Collapsed;
+            };
+
+            // Drag and Click handling
+            border.MouseLeftButtonDown += (s, e) =>
+            {
+                e.Handled = true;
+                _draggedLinkBorder = border;
+                _draggedLinkItem = link;
+                _draggedLinkStartMouse = e.GetPosition(ImageViewportGrid);
+                _draggedLinkStartPos = new Point(link.StartX, link.StartY);
+                _isDraggingLink = false;
+                border.CaptureMouse();
+            };
+
+            border.MouseMove += (s, e) =>
+            {
+                if (_draggedLinkBorder == border && e.LeftButton == MouseButtonState.Pressed)
+                {
+                    var curMouse = e.GetPosition(ImageViewportGrid);
+                    double dist = (curMouse - _draggedLinkStartMouse).Length;
+                    if (dist > 4 || _isDraggingLink)
+                    {
+                        _isDraggingLink = true;
+                        Point? curImgPt = OverlayPointToImage(curMouse);
+                        Point? startImgPt = OverlayPointToImage(_draggedLinkStartMouse);
+                        if (curImgPt.HasValue && startImgPt.HasValue)
+                        {
+                            double dx = curImgPt.Value.X - startImgPt.Value.X;
+                            double dy = curImgPt.Value.Y - startImgPt.Value.Y;
+                            link.StartX = Math.Clamp(_draggedLinkStartPos.X + dx, 0, _imageSource.PixelWidth);
+                            link.StartY = Math.Clamp(_draggedLinkStartPos.Y + dy, 0, _imageSource.PixelHeight);
+
+                            var r = GetDisplayedImageRect();
+                            double sx = r.Width / _imageSource.PixelWidth;
+                            double sy = r.Height / _imageSource.PixelHeight;
+                            Canvas.SetLeft(border, r.X + link.StartX * sx);
+                            Canvas.SetTop(border, r.Y + link.StartY * sy);
+                        }
+                    }
+                }
+            };
+
+            border.MouseLeftButtonUp += (s, e) =>
+            {
+                if (_draggedLinkBorder == border)
+                {
+                    border.ReleaseMouseCapture();
+                    _draggedLinkBorder = null;
+                    if (_isDraggingLink)
+                    {
+                        _isDraggingLink = false;
+                        SaveAnnotationsToRecord();
+                        RelayoutAnnotations();
+                    }
+                    else
+                    {
+                        OpenUrl(link.Url);
+                    }
+                }
+            };
+
+            // Right-click context menu
+            border.MouseRightButtonDown += (s, e) =>
+            {
+                e.Handled = true;
+                ShowLinkContextMenu(border, link);
+            };
+
+            Canvas.SetLeft(border, x);
+            Canvas.SetTop(border, y);
+            HyperlinkCanvas.Children.Add(border);
+        }
+
+        private void OpenUrl(string? url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return;
+            try
+            {
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+                ToastWindow.Show("Opening Link", url);
+            }
+            catch (Exception ex)
+            {
+                ToastWindow.Show("Cannot Open Link", ex.Message);
+            }
+        }
+
+        private void ShowLinkContextMenu(Border border, AnnotationItem link)
+        {
+            var cm = new ContextMenu();
+            var openItem = new MenuItem { Header = $"Open Link ({link.Url})" };
+            openItem.Click += (_, _) => OpenUrl(link.Url);
+            cm.Items.Add(openItem);
+
+            var copyItem = new MenuItem { Header = "Copy URL to Clipboard" };
+            copyItem.Click += (_, _) =>
+            {
+                try
+                {
+                    Clipboard.SetText(link.Url ?? "");
+                    ToastWindow.Show("Copied URL", link.Url ?? "");
+                }
+                catch { }
+            };
+            cm.Items.Add(copyItem);
+
+            cm.Items.Add(new Separator());
+
+            var editItem = new MenuItem { Header = "Edit Link URL..." };
+            editItem.Click += (_, _) =>
+            {
+                string? newUrl = ThemedDialog.Prompt(this, "Enter destination website URL:", "Edit Hyperlink URL", link.Url ?? "");
+                if (!string.IsNullOrWhiteSpace(newUrl))
+                {
+                    if (TryValidateUrl(newUrl, out string validUrl, out string displayName))
+                    {
+                        link.Url = validUrl;
+                        if (string.IsNullOrEmpty(link.Label) || link.Label == link.Url)
+                        {
+                            link.Label = displayName;
+                        }
+                        SaveAnnotationsToRecord();
+                        RelayoutAnnotations();
+                    }
+                    else
+                    {
+                        ThemedDialog.Show(this, $"\"{newUrl}\" is not a valid web URL.\nExample: https://github.com", "Invalid URL");
+                    }
+                }
+            };
+            cm.Items.Add(editItem);
+
+            var deleteItem = new MenuItem { Header = "Delete Button" };
+            deleteItem.Click += (_, _) =>
+            {
+                _hyperlinks.Remove(link);
+                SaveAnnotationsToRecord();
+                RelayoutAnnotations();
+            };
+            cm.Items.Add(deleteItem);
+
+            cm.PlacementTarget = border;
+            cm.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            cm.IsOpen = true;
+        }
+
+        public static bool TryValidateUrl(string input, out string validUrl, out string displayName)
+        {
+            validUrl = "";
+            displayName = "";
+            if (string.IsNullOrWhiteSpace(input)) return false;
+
+            string trimmed = input.Trim();
+            if (!trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                !trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                trimmed = "https://" + trimmed;
+            }
+
+            if (Uri.TryCreate(trimmed, UriKind.Absolute, out Uri? uri) &&
+                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) &&
+                !string.IsNullOrWhiteSpace(uri.Host) &&
+                uri.Host.Contains('.') &&
+                !uri.Host.EndsWith('.'))
+            {
+                validUrl = uri.AbsoluteUri;
+                string host = uri.Host;
+                if (host.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
+                    host = host.Substring(4);
+
+                string path = uri.AbsolutePath.TrimEnd('/');
+                if (path.Length > 1 && path.Length < 25)
+                    displayName = host + path;
+                else
+                    displayName = host;
+
+                return true;
+            }
+
+            return false;
+        }
+
+        public void PromptAddHyperlink(Point? clickImgPoint = null)
+        {
+            if (IsSlappedToDesktop) return;
+
+            string? input = ThemedDialog.Prompt(
+                this,
+                "Enter destination website URL:\n(e.g. https://github.com or google.com)",
+                "Add Hyperlink Button",
+                "https://");
+
+            if (string.IsNullOrWhiteSpace(input)) return;
+
+            if (!TryValidateUrl(input, out string validUrl, out string defaultLabel))
+            {
+                ThemedDialog.Show(
+                    this,
+                    $"\"{input}\" is not a valid web URL.\n\nPlease enter a complete web address, for example:\n• https://github.com\n• google.com\n• docs.microsoft.com",
+                    "Invalid URL");
+                return;
+            }
+
+            string? label = ThemedDialog.Prompt(
+                this,
+                $"Enter button display text (or keep '{defaultLabel}'):",
+                "Button Label",
+                defaultLabel);
+
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                label = defaultLabel;
+            }
+
+            Point pt;
+            if (clickImgPoint.HasValue)
+            {
+                pt = clickImgPoint.Value;
+            }
+            else
+            {
+                pt = new Point(_imageSource.PixelWidth * 0.15, _imageSource.PixelHeight * 0.15);
+            }
+
+            var linkItem = new AnnotationItem
+            {
+                Type = AnnotationType.Hyperlink,
+                StartX = pt.X,
+                StartY = pt.Y,
+                Url = validUrl,
+                Label = label.Trim()
+            };
+            _hyperlinks.Add(linkItem);
+            SaveAnnotationsToRecord();
+            RelayoutAnnotations();
+
+            ToastWindow.Show("Link Added", $"Added button: {label} \u2197");
+        }
+
+        public void EnterAnnotateMode(AnnotateTool tool = AnnotateTool.Arrow)
+        {
+            if (IsSlappedToDesktop) return; // Strict constraint: NOT available in slap mode
+
+            if (_isOcrModeActive) ExitOcrMode();
+
+            _isAnnotateModeActive = true;
+            _currentAnnotateTool = tool;
+
+            if (AnnotationInteractionLayer != null)
+            {
+                AnnotationInteractionLayer.Visibility = Visibility.Visible;
+                UpdateToolCursor();
+            }
+            if (AnnotateToolbar != null)
+            {
+                AnnotateToolbar.Visibility = Visibility.Visible;
+            }
+
+            SyncToolbarRadios();
+
+            if (AnnotateBtn != null)
+            {
+                AnnotateBtn.Background = (Brush)FindResource("Brush.AccentSoft");
+                AnnotateBtn.BorderBrush = (Brush)FindResource("Brush.Accent");
+                AnnotateIcon.Foreground = (Brush)FindResource("Brush.Accent");
+            }
+
+            if (CopyStatusText != null)
+            {
+                CopyStatusText.Text = "Annotation Mode (Esc to exit)";
+                _feedbackTimer.Stop();
+                _feedbackTimer.Start();
+            }
+        }
+
+        public void ExitAnnotateMode()
+        {
+            if (!_isAnnotateModeActive) return;
+
+            _isAnnotateModeActive = false;
+            _isAnnotateDrawing = false;
+
+            if (AnnotationInteractionLayer != null)
+            {
+                AnnotationInteractionLayer.Visibility = Visibility.Collapsed;
+            }
+            if (AnnotateToolbar != null)
+            {
+                AnnotateToolbar.Visibility = Visibility.Collapsed;
+            }
+            if (AnnotationTextHost != null)
+            {
+                AnnotationTextHost.Visibility = Visibility.Collapsed;
+            }
+            if (DrawPreviewPath != null) DrawPreviewPath.Visibility = Visibility.Collapsed;
+            if (DrawPreviewEllipse != null) DrawPreviewEllipse.Visibility = Visibility.Collapsed;
+
+            if (AnnotateBtn != null)
+            {
+                AnnotateBtn.Background = Brushes.Transparent;
+                AnnotateBtn.BorderBrush = Brushes.Transparent;
+                AnnotateIcon.Foreground = (Brush)FindResource("Brush.Accent");
+            }
+
+            if (CopyStatusText != null) CopyStatusText.Text = "";
+        }
+
+        public void ToggleAnnotateMode()
+        {
+            if (_isAnnotateModeActive) ExitAnnotateMode();
+            else EnterAnnotateMode();
+        }
+
+        private void AnnotationLayer_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton == MouseButton.Right)
+            {
+                ExitAnnotateMode();
+                return;
+            }
+
+            if (e.ChangedButton != MouseButton.Left) return;
+
+            Point viewportPt = e.GetPosition(ImageViewportGrid);
+            Point? imgPt = OverlayPointToImage(viewportPt);
+            if (!imgPt.HasValue) return;
+
+            _annotateDrawStart = viewportPt;
+            _annotateDrawStartImg = imgPt.Value;
+
+            if (_currentAnnotateTool == AnnotateTool.Hyperlink)
+            {
+                PromptAddHyperlink(imgPt.Value);
+                return;
+            }
+
+            if (_currentAnnotateTool == AnnotateTool.Text)
+            {
+                _annotateTextClickImg = imgPt.Value;
+                ShowInPlaceTextBox(viewportPt);
+                return;
+            }
+
+            if (_currentAnnotateTool == AnnotateTool.Arrow || _currentAnnotateTool == AnnotateTool.Circle)
+            {
+                _isAnnotateDrawing = true;
+                AnnotationInteractionLayer.CaptureMouse();
+
+                var brush = GetBrushFromHex(_activeAnnotateColor);
+                if (_currentAnnotateTool == AnnotateTool.Arrow)
+                {
+                    if (DrawPreviewPath != null)
+                    {
+                        DrawPreviewPath.Stroke = brush;
+                        DrawPreviewPath.Fill = brush;
+                        DrawPreviewPath.StrokeThickness = _activeAnnotateThickness;
+                        DrawPreviewPath.Visibility = Visibility.Visible;
+                        UpdatePreviewArrow(viewportPt, viewportPt);
+                    }
+                }
+                else if (_currentAnnotateTool == AnnotateTool.Circle)
+                {
+                    if (DrawPreviewEllipse != null)
+                    {
+                        DrawPreviewEllipse.Stroke = brush;
+                        DrawPreviewEllipse.StrokeThickness = _activeAnnotateThickness;
+                        DrawPreviewEllipse.Visibility = Visibility.Visible;
+                        UpdatePreviewEllipse(viewportPt, viewportPt);
+                    }
+                }
+            }
+        }
+
+        private void AnnotationLayer_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_isAnnotateDrawing) return;
+
+            Point curPt = e.GetPosition(ImageViewportGrid);
+            if (_currentAnnotateTool == AnnotateTool.Arrow)
+            {
+                UpdatePreviewArrow(_annotateDrawStart, curPt);
+            }
+            else if (_currentAnnotateTool == AnnotateTool.Circle)
+            {
+                UpdatePreviewEllipse(_annotateDrawStart, curPt);
+            }
+        }
+
+        private void AnnotationLayer_MouseUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_isAnnotateDrawing) return;
+
+            _isAnnotateDrawing = false;
+            AnnotationInteractionLayer.ReleaseMouseCapture();
+
+            if (DrawPreviewPath != null) DrawPreviewPath.Visibility = Visibility.Collapsed;
+            if (DrawPreviewEllipse != null) DrawPreviewEllipse.Visibility = Visibility.Collapsed;
+
+            Point curPt = e.GetPosition(ImageViewportGrid);
+            Point? endImgPt = OverlayPointToImage(curPt);
+            if (!endImgPt.HasValue) return;
+
+            double dist = (curPt - _annotateDrawStart).Length;
+            if (dist < 4) return;
+
+            if (_currentAnnotateTool == AnnotateTool.Arrow)
+            {
+                _annotations.Add(new AnnotationItem
+                {
+                    Type = AnnotationType.Arrow,
+                    StartX = _annotateDrawStartImg.X,
+                    StartY = _annotateDrawStartImg.Y,
+                    EndX = endImgPt.Value.X,
+                    EndY = endImgPt.Value.Y,
+                    ColorHex = _activeAnnotateColor,
+                    StrokeThickness = _activeAnnotateThickness
+                });
+                SaveAnnotationsToRecord();
+                RelayoutAnnotations();
+            }
+            else if (_currentAnnotateTool == AnnotateTool.Circle)
+            {
+                _annotations.Add(new AnnotationItem
+                {
+                    Type = AnnotationType.Circle,
+                    StartX = _annotateDrawStartImg.X,
+                    StartY = _annotateDrawStartImg.Y,
+                    EndX = endImgPt.Value.X,
+                    EndY = endImgPt.Value.Y,
+                    ColorHex = _activeAnnotateColor,
+                    StrokeThickness = _activeAnnotateThickness
+                });
+                SaveAnnotationsToRecord();
+                RelayoutAnnotations();
+            }
+        }
+
+        private void UpdatePreviewArrow(Point p1, Point p2)
+        {
+            if (DrawPreviewPath == null) return;
+            var brush = GetBrushFromHex(_activeAnnotateColor);
+            var p = CreateArrowPath(p1.X, p1.Y, p2.X, p2.Y, brush, _activeAnnotateThickness);
+            DrawPreviewPath.Data = p.Data;
+        }
+
+        private void UpdatePreviewEllipse(Point p1, Point p2)
+        {
+            if (DrawPreviewEllipse == null) return;
+            double minX = Math.Min(p1.X, p2.X);
+            double minY = Math.Min(p1.Y, p2.Y);
+            double w = Math.Max(2, Math.Abs(p2.X - p1.X));
+            double h = Math.Max(2, Math.Abs(p2.Y - p1.Y));
+
+            Canvas.SetLeft(DrawPreviewEllipse, minX);
+            Canvas.SetTop(DrawPreviewEllipse, minY);
+            DrawPreviewEllipse.Width = w;
+            DrawPreviewEllipse.Height = h;
+        }
+
+        private void ShowInPlaceTextBox(Point viewportPt)
+        {
+            if (AnnotationTextHost == null || AnnotationInputBox == null) return;
+            Canvas.SetLeft(AnnotationTextHost, viewportPt.X);
+            Canvas.SetTop(AnnotationTextHost, viewportPt.Y);
+            AnnotationTextHost.Visibility = Visibility.Visible;
+            AnnotationInputBox.Text = "";
+            AnnotationInputBox.Focus();
+            Keyboard.Focus(AnnotationInputBox);
+        }
+
+        private void CommitInPlaceText()
+        {
+            if (AnnotationTextHost == null || AnnotationTextHost.Visibility != Visibility.Visible || AnnotationInputBox == null) return;
+
+            string text = AnnotationInputBox.Text.Trim();
+            AnnotationTextHost.Visibility = Visibility.Collapsed;
+
+            if (!string.IsNullOrEmpty(text))
+            {
+                _annotations.Add(new AnnotationItem
+                {
+                    Type = AnnotationType.Text,
+                    StartX = _annotateTextClickImg.X,
+                    StartY = _annotateTextClickImg.Y,
+                    Text = text,
+                    ColorHex = _activeAnnotateColor
+                });
+                SaveAnnotationsToRecord();
+                RelayoutAnnotations();
+            }
+        }
+
+        private void AnnotationInputBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                CommitInPlaceText();
+            }
+            else if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                if (AnnotationTextHost != null) AnnotationTextHost.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void AnnotationInputBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            CommitInPlaceText();
+        }
+
+        private void ToolRadio_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.Tag is string tag)
+            {
+                switch (tag)
+                {
+                    case "Arrow":
+                        _currentAnnotateTool = AnnotateTool.Arrow;
+                        break;
+                    case "Circle":
+                        _currentAnnotateTool = AnnotateTool.Circle;
+                        break;
+                    case "Text":
+                        _currentAnnotateTool = AnnotateTool.Text;
+                        break;
+                    case "Hyperlink":
+                        _currentAnnotateTool = AnnotateTool.Hyperlink;
+                        break;
+                }
+                UpdateToolCursor();
+            }
+        }
+
+        private void UpdateToolCursor()
+        {
+            if (AnnotationInteractionLayer == null) return;
+            switch (_currentAnnotateTool)
+            {
+                case AnnotateTool.Text:
+                    AnnotationInteractionLayer.Cursor = Cursors.IBeam;
+                    break;
+                case AnnotateTool.Hyperlink:
+                    AnnotationInteractionLayer.Cursor = Cursors.Hand;
+                    break;
+                case AnnotateTool.Arrow:
+                case AnnotateTool.Circle:
+                default:
+                    AnnotationInteractionLayer.Cursor = Cursors.Cross;
+                    break;
+            }
+        }
+
+        private void SyncToolbarRadios()
+        {
+            if (ToolArrowRadio != null) ToolArrowRadio.IsChecked = (_currentAnnotateTool == AnnotateTool.Arrow);
+            if (ToolCircleRadio != null) ToolCircleRadio.IsChecked = (_currentAnnotateTool == AnnotateTool.Circle);
+            if (ToolTextRadio != null) ToolTextRadio.IsChecked = (_currentAnnotateTool == AnnotateTool.Text);
+            if (ToolLinkRadio != null) ToolLinkRadio.IsChecked = (_currentAnnotateTool == AnnotateTool.Hyperlink);
+        }
+
+        private void ColorSwatch_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is Border b && b.Tag is string hex)
+            {
+                _activeAnnotateColor = hex;
+                if (ColorSwatchRed != null) ColorSwatchRed.BorderBrush = hex == "#FFFF4D4F" ? Brushes.White : Brushes.Transparent;
+                if (ColorSwatchBlue != null) ColorSwatchBlue.BorderBrush = hex == "#FF3B82F6" ? Brushes.White : Brushes.Transparent;
+                if (ColorSwatchGreen != null) ColorSwatchGreen.BorderBrush = hex == "#FF10B981" ? Brushes.White : Brushes.Transparent;
+                if (ColorSwatchAmber != null) ColorSwatchAmber.BorderBrush = hex == "#FFF59E0B" ? Brushes.White : Brushes.Transparent;
+                if (ColorSwatchWhite != null) ColorSwatchWhite.BorderBrush = hex == "#FFFFFFFF" ? (Brush)FindResource("Brush.Accent") : Brushes.Transparent;
+            }
+        }
+
+        private void AnnotateUndo_Click(object sender, RoutedEventArgs e)
+        {
+            if (_annotations.Count > 0)
+            {
+                _annotations.RemoveAt(_annotations.Count - 1);
+                SaveAnnotationsToRecord();
+                RelayoutAnnotations();
+                ToastWindow.Show("Undo", "Removed last annotation");
+            }
+            else if (_hyperlinks.Count > 0)
+            {
+                _hyperlinks.RemoveAt(_hyperlinks.Count - 1);
+                SaveAnnotationsToRecord();
+                RelayoutAnnotations();
+                ToastWindow.Show("Undo", "Removed last link");
+            }
+        }
+
+        private void AnnotateClear_Click(object sender, RoutedEventArgs e)
+        {
+            if (_annotations.Count == 0 && _hyperlinks.Count == 0) return;
+            _annotations.Clear();
+            _hyperlinks.Clear();
+            SaveAnnotationsToRecord();
+            RelayoutAnnotations();
+            ToastWindow.Show("Clear", "Cleared all annotations and links");
+        }
+
+        private void AnnotateDone_Click(object sender, RoutedEventArgs e)
+        {
+            ExitAnnotateMode();
+        }
+
+        private void AnnotateToggle_Click(object sender, RoutedEventArgs e)
+        {
+            ToggleAnnotateMode();
+        }
+
+        private void ContextAnnotateToolbar_Click(object sender, RoutedEventArgs e) => EnterAnnotateMode();
+        private void ContextDrawArrow_Click(object sender, RoutedEventArgs e) => EnterAnnotateMode(AnnotateTool.Arrow);
+        private void ContextDrawCircle_Click(object sender, RoutedEventArgs e) => EnterAnnotateMode(AnnotateTool.Circle);
+        private void ContextAddText_Click(object sender, RoutedEventArgs e) => EnterAnnotateMode(AnnotateTool.Text);
+        private void ContextAddLink_Click(object sender, RoutedEventArgs e)
+        {
+            if (IsSlappedToDesktop) return;
+            PromptAddHyperlink();
+        }
+        private void ContextClearAnnotations_Click(object sender, RoutedEventArgs e) => AnnotateClear_Click(sender, e);
+
+        private static Brush GetBrushFromHex(string? hex)
+        {
+            if (string.IsNullOrEmpty(hex)) return Brushes.Red;
+            try
+            {
+                return new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            }
+            catch
+            {
+                return Brushes.Red;
+            }
+        }
+
+        public BitmapSource GetAnnotatedImageBitmap()
+        {
+            if (_imageSource == null || (_annotations.Count == 0 && _hyperlinks.Count == 0))
+            {
+                return _imageSource!;
+            }
+
+            int width = _imageSource.PixelWidth;
+            int height = _imageSource.PixelHeight;
+
+            var visual = new DrawingVisual();
+            using (var dc = visual.RenderOpen())
+            {
+                dc.DrawImage(_imageSource, new Rect(0, 0, width, height));
+
+                foreach (var item in _annotations)
+                {
+                    var brush = GetBrushFromHex(item.ColorHex);
+                    switch (item.Type)
+                    {
+                        case AnnotationType.Arrow:
+                        {
+                            double dx = item.EndX - item.StartX;
+                            double dy = item.EndY - item.StartY;
+                            double len = Math.Sqrt(dx * dx + dy * dy);
+                            if (len >= 2)
+                            {
+                                double ux = dx / len;
+                                double uy = dy / len;
+                                double px = -uy;
+                                double py = ux;
+                                double headLen = Math.Min(item.StrokeThickness * 4.2 + 8, len * 0.45);
+                                double headWidth = headLen * 0.55;
+
+                                double bx = item.EndX - ux * headLen;
+                                double by = item.EndY - uy * headLen;
+
+                                double w1x = bx + px * headWidth;
+                                double w1y = by + py * headWidth;
+                                double w2x = bx - px * headWidth;
+                                double w2y = by - py * headWidth;
+
+                                var pen = new Pen(brush, item.StrokeThickness) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+                                dc.DrawLine(pen, new Point(item.StartX, item.StartY), new Point(bx, by));
+
+                                var geom = new StreamGeometry();
+                                using (var ctx = geom.Open())
+                                {
+                                    ctx.BeginFigure(new Point(item.EndX, item.EndY), true, true);
+                                    ctx.LineTo(new Point(w1x, w1y), true, false);
+                                    ctx.LineTo(new Point(w2x, w2y), true, false);
+                                }
+                                geom.Freeze();
+                                dc.DrawGeometry(brush, null, geom);
+                            }
+                            break;
+                        }
+                        case AnnotationType.Circle:
+                        {
+                            double cx = (item.StartX + item.EndX) / 2.0;
+                            double cy = (item.StartY + item.EndY) / 2.0;
+                            double rx = Math.Abs(item.EndX - item.StartX) / 2.0;
+                            double ry = Math.Abs(item.EndY - item.StartY) / 2.0;
+                            var pen = new Pen(brush, item.StrokeThickness);
+                            dc.DrawEllipse(null, pen, new Point(cx, cy), rx, ry);
+                            break;
+                        }
+                        case AnnotationType.Text:
+                        {
+                            var ft = new FormattedText(
+                                item.Text ?? "",
+                                System.Globalization.CultureInfo.InvariantCulture,
+                                FlowDirection.LeftToRight,
+                                new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal),
+                                16,
+                                brush,
+                                96.0);
+                            var bgRect = new Rect(item.StartX - 4, item.StartY - 2, ft.Width + 8, ft.Height + 4);
+                            dc.DrawRoundedRectangle(new SolidColorBrush(Color.FromArgb(220, 16, 20, 32)), null, bgRect, 4, 4);
+                            dc.DrawText(ft, new Point(item.StartX, item.StartY));
+                            break;
+                        }
+                    }
+                }
+
+                foreach (var link in _hyperlinks)
+                {
+                    string label = string.IsNullOrEmpty(link.Label) ? link.Url ?? "Link" : link.Label;
+                    var linkBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FF00D2FF"));
+                    var ft = new FormattedText(
+                        label + " \u2197",
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        FlowDirection.LeftToRight,
+                        new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal),
+                        13,
+                        linkBrush,
+                        96.0);
+
+                    var rect = new Rect(link.StartX, link.StartY, ft.Width + 18, ft.Height + 8);
+                    var pillBrush = new SolidColorBrush(Color.FromArgb(235, 18, 23, 36));
+                    var pillPen = new Pen(linkBrush, 1.2);
+                    dc.DrawRoundedRectangle(pillBrush, pillPen, rect, 11, 11);
+                    dc.DrawText(ft, new Point(link.StartX + 9, link.StartY + 4));
+                }
+            }
+
+            var rtb = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+            rtb.Render(visual);
+            rtb.Freeze();
+            return rtb;
+        }
     }
 }
