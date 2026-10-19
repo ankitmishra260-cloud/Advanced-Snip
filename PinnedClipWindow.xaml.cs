@@ -861,15 +861,32 @@ namespace AdvancedSnip
 
                 UpdateLayout();
 
-                // Desktop Layer Strategy:
-                // PinnedClipWindow sits directly at HWND_BOTTOM on the desktop:
-                // - Remains 100% visible, sharp, and high-DPI rendered (never hidden!).
-                // - Transparent to mouse clicks (WS_EX_TRANSPARENT + HTTRANSPARENT) so clicks pass to desktop/wallpaper.
-                // - Owned by Progman/Desktop Shell so Win+D ("Show Desktop") does not minimize it.
-                // - Positioned at HWND_BOTTOM so all normal application windows sit on top.
-                Visibility = Visibility.Visible;
-                Show();
-                ApplyDesktopLayerStyles(true, currentRect);
+                bool slappedInWorkerW = false;
+                var bmp = CreateSlapBitmap();
+                if (bmp != null && Record != null)
+                {
+                    slappedInWorkerW = DesktopWallpaperHost.Slap(
+                        Record.Id.ToString(),
+                        bmp,
+                        (float)CurrentImageOpacity,
+                        currentRect.X,
+                        currentRect.Y,
+                        currentRect.Width,
+                        currentRect.Height);
+                }
+
+                if (slappedInWorkerW)
+                {
+                    // Cleanly hide the interactive WPF window so it does NOT draw above desktop icons
+                    Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    // Fallback to desktop layer styles if WorkerW cannot be isolated
+                    Visibility = Visibility.Visible;
+                    Show();
+                    ApplyDesktopLayerStyles(true, currentRect);
+                }
 
                 if (_slapBadge == null)
                 {
@@ -889,6 +906,11 @@ namespace AdvancedSnip
                 {
                     _slapBadge.Close();
                     _slapBadge = null;
+                }
+
+                if (Record != null)
+                {
+                    DesktopWallpaperHost.Unslap(Record.Id.ToString(), currentRect.X, currentRect.Y, currentRect.Width, currentRect.Height);
                 }
 
                 ApplyDesktopLayerStyles(false, currentRect);
@@ -966,6 +988,90 @@ namespace AdvancedSnip
                 Win32.SetWindowPos(handle, Win32.HWND_TOP, 0, 0, 0, 0,
                     Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_SHOWWINDOW);
             }
+        }
+
+        private System.Drawing.Bitmap? CreateSlapBitmap()
+        {
+            try
+            {
+                System.Drawing.Bitmap? bmp = null;
+                if (!string.IsNullOrEmpty(Record?.CachedImagePath) && File.Exists(Record.CachedImagePath))
+                {
+                    using var stream = new FileStream(Record.CachedImagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    bmp = new System.Drawing.Bitmap(stream);
+                }
+                else if (!string.IsNullOrEmpty(_filePath) && File.Exists(_filePath))
+                {
+                    using var stream = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    bmp = new System.Drawing.Bitmap(stream);
+                }
+                else if (_imageSource != null)
+                {
+                    using var ms = new MemoryStream();
+                    var encoder = new PngBitmapEncoder();
+                    encoder.Frames.Add(BitmapFrame.Create(_imageSource));
+                    encoder.Save(ms);
+                    ms.Position = 0;
+                    bmp = new System.Drawing.Bitmap(ms);
+                }
+
+                if (bmp != null)
+                {
+                    var rf = GetRotateFlipType(CurrentRotation, CurrentFlipH, CurrentFlipV);
+                    if (rf != System.Drawing.RotateFlipType.RotateNoneFlipNone)
+                    {
+                        bmp.RotateFlip(rf);
+                    }
+                }
+
+                return bmp;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static System.Drawing.RotateFlipType GetRotateFlipType(int rotation, bool flipH, bool flipV)
+        {
+            int r = (rotation % 360 + 360) % 360;
+            if (!flipH && !flipV)
+            {
+                return r switch
+                {
+                    90 => System.Drawing.RotateFlipType.Rotate90FlipNone,
+                    180 => System.Drawing.RotateFlipType.Rotate180FlipNone,
+                    270 => System.Drawing.RotateFlipType.Rotate270FlipNone,
+                    _ => System.Drawing.RotateFlipType.RotateNoneFlipNone
+                };
+            }
+            if (flipH && !flipV)
+            {
+                return r switch
+                {
+                    90 => System.Drawing.RotateFlipType.Rotate90FlipX,
+                    180 => System.Drawing.RotateFlipType.Rotate180FlipX,
+                    270 => System.Drawing.RotateFlipType.Rotate270FlipX,
+                    _ => System.Drawing.RotateFlipType.RotateNoneFlipX
+                };
+            }
+            if (!flipH && flipV)
+            {
+                return r switch
+                {
+                    90 => System.Drawing.RotateFlipType.Rotate90FlipY,
+                    180 => System.Drawing.RotateFlipType.Rotate180FlipY,
+                    270 => System.Drawing.RotateFlipType.Rotate270FlipY,
+                    _ => System.Drawing.RotateFlipType.RotateNoneFlipY
+                };
+            }
+            return r switch
+            {
+                90 => System.Drawing.RotateFlipType.Rotate90FlipXY,
+                180 => System.Drawing.RotateFlipType.Rotate180FlipXY,
+                270 => System.Drawing.RotateFlipType.Rotate270FlipXY,
+                _ => System.Drawing.RotateFlipType.RotateNoneFlipXY
+            };
         }
 
         protected override void OnClosed(EventArgs e)

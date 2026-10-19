@@ -14,7 +14,9 @@ namespace AdvancedSnip
         {
             _targetWindow = targetWindow ?? throw new ArgumentNullException(nameof(targetWindow));
             InitializeComponent();
-            Owner = targetWindow;
+            // Do not set Owner = targetWindow, so WPF does not hide this badge when targetWindow is collapsed
+            Topmost = true;
+            ShowInTaskbar = false;
             UpdatePosition(initialRect);
         }
 
@@ -27,18 +29,17 @@ namespace AdvancedSnip
                 int ex = Services.Win32.GetWindowLong(handle, Services.Win32.GWL_EXSTYLE);
                 ex |= Services.Win32.WS_EX_TOOLWINDOW | Services.Win32.WS_EX_NOACTIVATE;
                 Services.Win32.SetWindowLong(handle, Services.Win32.GWL_EXSTYLE, ex);
+
+                IntPtr shell = Services.Win32.GetDesktopShellWindow();
+                if (shell != IntPtr.Zero)
+                {
+                    Services.Win32.SetWindowLongPtr(handle, Services.Win32.GWLP_HWNDPARENT, shell);
+                }
             }
         }
 
         public void UpdatePosition(System.Drawing.Rectangle? physicalRect = null)
         {
-            if (_targetWindow != null && _targetWindow.IsLoaded && _targetWindow.ActualWidth > 0)
-            {
-                Left = _targetWindow.Left + _targetWindow.ActualWidth - Width - 6;
-                Top = _targetWindow.Top + 6;
-                return;
-            }
-
             var rect = physicalRect ?? (_targetWindow != null ? Services.WindowPlacement.GetPhysicalRect(_targetWindow) : System.Drawing.Rectangle.Empty);
             if (!rect.IsEmpty)
             {
@@ -48,6 +49,13 @@ namespace AdvancedSnip
                 // Position badge at top-right inside the slapped image
                 Left = (rect.Right / scale) - Width - 6;
                 Top = (rect.Top / scale) + 6;
+                return;
+            }
+
+            if (_targetWindow != null && _targetWindow.IsLoaded && _targetWindow.ActualWidth > 0)
+            {
+                Left = _targetWindow.Left + _targetWindow.ActualWidth - Width - 6;
+                Top = _targetWindow.Top + 6;
             }
         }
 
