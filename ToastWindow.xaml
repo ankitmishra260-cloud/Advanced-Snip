@@ -13,18 +13,66 @@
         Focusable="False"
         ShowActivated="False"
         FontFamily="Segoe UI"
-        MouseLeftButtonUp="Toast_Click">
+        MouseLeftButtonUp="Toast_Click"
+        MouseEnter="Toast_MouseEnter"
+        MouseLeave="Toast_MouseLeave">
+
+    <Window.Resources>
+        <Style x:Key="ToastCloseBtnStyle" TargetType="Button">
+            <Setter Property="Width"           Value="24"/>
+            <Setter Property="Height"          Value="24"/>
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="Foreground"      Value="{DynamicResource Brush.TextMuted}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Focusable"       Value="False"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="ToolTip"         Value="Dismiss notification"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="6"
+                                Background="{TemplateBinding Background}">
+                            <TextBlock x:Name="Glyph"
+                                       Text="&#xE8BB;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="9.5"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brush.Hover}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.TextHeading}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brush.AccentSoft}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
 
     <!-- Themed: follows the palette chosen in Settings, like the clipboard HUD and
          its preview. The drop shadow and border keep it readable over any desktop. -->
     <Border CornerRadius="12" Background="{DynamicResource Brush.Card}"
             BorderBrush="{DynamicResource Brush.BorderStrong}" BorderThickness="1"
-            Padding="18,14" MaxWidth="460">
+            Padding="16,14,12,14" MaxWidth="460">
         <Border.Effect>
             <DropShadowEffect BlurRadius="28" ShadowDepth="5" Opacity="0.55" Color="Black"/>
         </Border.Effect>
 
         <DockPanel>
+            <Button x:Name="CloseBtn"
+                    DockPanel.Dock="Right"
+                    Style="{StaticResource ToastCloseBtnStyle}"
+                    VerticalAlignment="Top"
+                    Margin="10,-4,-2,0"
+                    Click="CloseBtn_Click"/>
+
             <Border x:Name="ThumbFrame" DockPanel.Dock="Left" Width="72" Height="72"
                     CornerRadius="6" ClipToBounds="True" Background="{DynamicResource Brush.Subtle}"
                     Margin="0,0,12,0" Visibility="Collapsed">

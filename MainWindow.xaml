@@ -610,7 +610,7 @@
                 <StackPanel DockPanel.Dock="Top" Margin="18,22,18,16">
                     <TextBlock Text="✂ Advanced Snip"
                                FontSize="16" FontWeight="Bold" Foreground="{DynamicResource Brush.Text}"/>
-                    <TextBlock x:Name="VersionText" Text="v3.0.0 by Ankit Mishra"
+                    <TextBlock x:Name="VersionText" Text="v3.2.0 by Ankit Mishra"
                                FontSize="11" Foreground="{DynamicResource Brush.TextMuted}" Margin="0,2,0,0"/>
                 </StackPanel>
 
@@ -1625,7 +1625,7 @@
                 <StackPanel Margin="40,36,40,48" MaxWidth="780" HorizontalAlignment="Left">
                     <TextBlock Text="✂ Advanced Snip" FontSize="26" FontWeight="Bold"
                                Foreground="{DynamicResource Brush.Text}"/>
-                    <TextBlock x:Name="HelpVersion" Text="Version 3.0.0 by Ankit Mishra"
+                    <TextBlock x:Name="HelpVersion" Text="Version 3.2.0 by Ankit Mishra"
                                Foreground="{DynamicResource Brush.TextFaint}" FontSize="13"
                                Margin="0,4,0,18"/>
                     <TextBlock Style="{StaticResource HelpP}"
@@ -1719,6 +1719,16 @@
                             <TextBlock Style="{StaticResource HelpP}" Text="Three organized tabs: Images (captures), Videos (recordings with durations), and PDFs (exported documents)."/>
                             <TextBlock Style="{StaticResource HelpP}" Text="Search by file name or toggle OCR text search to search captures by words found inside images (runs offline via Windows OCR engine)."/>
                             <TextBlock Style="{StaticResource HelpP}" Text="Supports multi-item selection, batch clipboard copy, and safe Recycle Bin deletion."/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource HelpH}" Text="New in v3.2: Multi-Screen Slap Calibration, Toast Dismiss &amp; Theme Overhaul" Margin="0,0,0,10"/>
+                            <TextBlock Style="{StaticResource HelpP}" Text="• Multi-Monitor Slap to Desktop: Native per-monitor wallpaper composition via IDesktopWallpaper at each display's exact physical resolution, preserving per-monitor wallpapers, slideshows, EXIF orientation, and crash-safe recovery."/>
+                            <TextBlock Style="{StaticResource HelpP}" Text="• Pixel-Exact Canvas Calibration: Slapped pins capture the live WPF viewport 1:1 across Uniform, Fill, UniformToFill, and Actual sizing modes, zoom levels, scroll offsets, rotations, and mixed DPIs with zero zoom shift."/>
+                            <TextBlock Style="{StaticResource HelpP}" Text="• Custom Capture Toast Close Button: Dismiss image and video capture notifications directly via the themed close icon without opening the editor, with hover-to-pause auto-dismiss."/>
+                            <TextBlock Style="{StaticResource HelpP}" Text="• Theme Reliability &amp; Contrast Audit: Atomic live theme switching across all 13 themes with zero resource-not-found errors and WCAG AA contrast improvements (including Solar Flare, Midnight Amethyst, Prism Aurora, and Emerald Matrix)."/>
                         </StackPanel>
                     </Border>
 

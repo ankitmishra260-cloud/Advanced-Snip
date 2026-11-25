@@ -22,12 +22,11 @@
         <GradientStop Offset="1.00" Color="#FF050A08"/>
     </RadialGradientBrush>
 
-    <!-- Active Navigation Pill: 5-stop radiant neon emerald-mint beam -->
+    <!-- Active Navigation Pill: deep cyber-emerald glow keeping neon mint accent text razor-sharp -->
     <LinearGradientBrush x:Key="Brush.NavActive" StartPoint="0,0" EndPoint="1,0" po:Freeze="True">
-        <GradientStop Offset="0.00" Color="#FF00F59B"/>
-        <GradientStop Offset="0.22" Color="#FF059669"/>
-        <GradientStop Offset="0.55" Color="#FF047857"/>
-        <GradientStop Offset="0.85" Color="#FF06251B"/>
+        <GradientStop Offset="0.00" Color="#FF073D2A"/>
+        <GradientStop Offset="0.35" Color="#FF072B20"/>
+        <GradientStop Offset="0.75" Color="#FF071E16"/>
         <GradientStop Offset="1.00" Color="#0006251B"/>
     </LinearGradientBrush>
 
@@ -46,11 +45,11 @@
 
     <SolidColorBrush x:Key="Brush.Subtle" Color="#FF060D0A" po:Freeze="True"/>
 
-    <!-- Hover: Radial bioluminescent mint aura glow -->
-    <RadialGradientBrush x:Key="Brush.Hover" Center="0.5,0.5" GradientOrigin="0.5,0.5" RadiusX="0.75" RadiusY="0.75" po:Freeze="True">
-        <GradientStop Offset="0.00" Color="#6600F59B"/>
-        <GradientStop Offset="0.70" Color="#4D059669"/>
-        <GradientStop Offset="1.00" Color="#26047857"/>
+    <!-- Hover: Radial bioluminescent mint aura calibrated for readable text and accent -->
+    <RadialGradientBrush x:Key="Brush.Hover" Center="0.5,0.5" GradientOrigin="0.5,0.5" RadiusX="0.80" RadiusY="0.80" po:Freeze="True">
+        <GradientStop Offset="0.00" Color="#3400D688"/>
+        <GradientStop Offset="0.70" Color="#24059669"/>
+        <GradientStop Offset="1.00" Color="#14047857"/>
     </RadialGradientBrush>
 
     <!-- Window Edge: Glowing emerald-mint border -->

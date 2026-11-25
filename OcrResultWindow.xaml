@@ -201,7 +201,7 @@
             <!-- 3. Text Content Area -->
             <Border Grid.Row="2" Padding="12,10">
                 <TextBox x:Name="OcrTextBox"
-                         Background="{DynamicResource Brush.Background}"
+                         Background="{DynamicResource Brush.Input}"
                          Foreground="{DynamicResource Brush.TextBody}"
                          BorderBrush="{DynamicResource Brush.BorderInput}"
                          BorderThickness="1"

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -186,8 +187,41 @@ namespace AdvancedSnip
             });
         }
 
+        private void CloseBtn_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            Dismiss();
+        }
+
+        private void Toast_MouseEnter(object sender, MouseEventArgs e)
+        {
+            if (!_closing) _life.Stop();
+        }
+
+        private void Toast_MouseLeave(object sender, MouseEventArgs e)
+        {
+            if (!_closing) _life.Start();
+        }
+
+        private bool IsInsideCloseButton(DependencyObject? source)
+        {
+            var current = source;
+            while (current != null)
+            {
+                if (ReferenceEquals(current, CloseBtn)) return true;
+                current = VisualTreeHelper.GetParent(current);
+            }
+            return false;
+        }
+
         private void Toast_Click(object sender, MouseButtonEventArgs e)
         {
+            if (IsInsideCloseButton(e.OriginalSource as DependencyObject))
+            {
+                e.Handled = true;
+                return;
+            }
+
             var action = _onClick;
             Dismiss();
 

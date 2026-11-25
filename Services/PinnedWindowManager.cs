@@ -58,6 +58,32 @@ namespace AdvancedSnip.Services
         private static bool _initialized;
         private static bool _restored;
 
+        static PinnedWindowManager()
+        {
+            DesktopWallpaperHost.DisplayTopologyChanged += OnDisplayTopologyChanged;
+        }
+
+        private static void OnDisplayTopologyChanged(object? sender, EventArgs e)
+        {
+            var app = Application.Current;
+            if (app == null || app.Dispatcher == null || app.Dispatcher.HasShutdownStarted) return;
+
+            app.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                foreach (var win in ActiveWindows)
+                {
+                    try
+                    {
+                        if (win.IsSlappedToDesktop)
+                        {
+                            win.RefreshSlapBadgePosition();
+                        }
+                    }
+                    catch { }
+                }
+            }));
+        }
+
         public static IReadOnlyList<PinnedClipWindow> ActiveWindows
         {
             get
@@ -224,6 +250,8 @@ namespace AdvancedSnip.Services
                 toRestore = _records.Values.Where(r => r.IsDesktopPinned).ToList();
             }
 
+            var windowsToSlap = new List<PinnedClipWindow>();
+
             foreach (var record in toRestore)
             {
                 try
@@ -246,9 +274,17 @@ namespace AdvancedSnip.Services
                     BitmapSource image = ImageInterop.LoadBitmap(loadPath);
                     EnsureVisibleOnScreen(record);
 
-                    var win = new PinnedClipWindow(image, record.FilePath, record.Caption, record);
-                    win.ShowActivated = false;
+                    var win = new PinnedClipWindow(image, record.FilePath, record.Caption, record)
+                    {
+                        DeferInitialSlap = true,
+                        ShowActivated = false
+                    };
                     win.Show();
+
+                    if (record.IsSlappedToDesktop)
+                    {
+                        windowsToSlap.Add(win);
+                    }
 
                     var handle = new WindowInteropHelper(win).Handle;
                     if (handle != IntPtr.Zero)
@@ -259,6 +295,7 @@ namespace AdvancedSnip.Services
 
                     win.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(() =>
                     {
+                        if (win.IsSlappedToDesktop || !win.IsVisible) return;
                         var h = new WindowInteropHelper(win).Handle;
                         if (h != IntPtr.Zero)
                         {
@@ -271,6 +308,30 @@ namespace AdvancedSnip.Services
                 {
                     // Skip corrupted pin record
                 }
+            }
+
+            // Batch all restored slapped pins into a single desktop wallpaper composition pass
+            if (windowsToSlap.Count > 0 && Application.Current?.Dispatcher != null)
+            {
+                Application.Current.Dispatcher.BeginInvoke(
+                    System.Windows.Threading.DispatcherPriority.Loaded,
+                    new Action(() =>
+                    {
+                        using (DesktopWallpaperHost.BeginBatch())
+                        {
+                            foreach (var w in windowsToSlap)
+                            {
+                                try
+                                {
+                                    if (!w.IsSlappedToDesktop)
+                                    {
+                                        w.SetSlappedToDesktop(true);
+                                    }
+                                }
+                                catch { }
+                            }
+                        }
+                    }));
             }
 
             CheckOverlaps();
@@ -392,31 +453,37 @@ namespace AdvancedSnip.Services
         }
 
         /// <summary>
-        /// Slaps all active pinned windows behind desktop icons.
+        /// Slaps all active pinned windows behind desktop icons in a single batched pass.
         /// </summary>
         public static void SlapAllToDesktop()
         {
             var windows = ActiveWindows;
-            foreach (var win in windows)
+            using (DesktopWallpaperHost.BeginBatch())
             {
-                if (!win.IsSlappedToDesktop)
+                foreach (var win in windows)
                 {
-                    win.SetSlappedToDesktop(true);
+                    if (!win.IsSlappedToDesktop)
+                    {
+                        win.SetSlappedToDesktop(true);
+                    }
                 }
             }
         }
 
         /// <summary>
-        /// Restores all active slapped pins back to interactive floating windows.
+        /// Restores all active slapped pins back to interactive floating windows in a single batched pass.
         /// </summary>
         public static void UnslapAllFromDesktop()
         {
             var windows = ActiveWindows;
-            foreach (var win in windows)
+            using (DesktopWallpaperHost.BeginBatch())
             {
-                if (win.IsSlappedToDesktop)
+                foreach (var win in windows)
                 {
-                    win.SetSlappedToDesktop(false);
+                    if (win.IsSlappedToDesktop)
+                    {
+                        win.SetSlappedToDesktop(false);
+                    }
                 }
             }
         }

@@ -23,15 +23,15 @@
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="Brush.NavActive" StartPoint="0,0" EndPoint="1,0" po:Freeze="True">
-        <GradientStop Offset="0"    Color="#FF055C9E"/>
-        <GradientStop Offset="0.5"  Color="#FF093A6B"/>
+        <GradientStop Offset="0"    Color="#FF07345E"/>
+        <GradientStop Offset="0.5"  Color="#FF0A274A"/>
         <GradientStop Offset="1"    Color="#FF0C1B33"/>
     </LinearGradientBrush>
 
     <SolidColorBrush x:Key="Brush.Card"         Color="#FF0E1726" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Input"        Color="#FF152136" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Subtle"       Color="#FF0B1220" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.Hover"        Color="#FF163E6E" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Hover"        Color="#FF12325A" po:Freeze="True"/>
 
     <!-- Window edge: glowing electric neon blue border -->
     <SolidColorBrush x:Key="Brush.WindowEdge"   Color="#FF00B4FF" po:Freeze="True"/>
@@ -52,7 +52,7 @@
     <SolidColorBrush x:Key="Brush.Accent"       Color="#FF00B4FF" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.AccentHover"  Color="#FF38D2FF" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.AccentSoft"   Color="#FF0A2E59" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.OnAccent"     Color="#FFFFFFFF" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.OnAccent"     Color="#FF04101F" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Success"      Color="#FF00F59B" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Warning"      Color="#FFFBBF24" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Danger"       Color="#FFF43F5E" po:Freeze="True"/>

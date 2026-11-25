@@ -92,33 +92,70 @@ namespace AdvancedSnip.Services
             // change and the window would not.
             if (_loadedDictionary != null && _loadedLeaf == leaf) return;
 
+            var dict = LoadThemeDictionary(leaf);
+            if (dict == null)
+            {
+                // Graceful fallback to Light/Dark if a specific theme dictionary cannot be resolved
+                string fallbackLeaf = dark ? "Dark" : "Light";
+                if (!string.Equals(leaf, fallbackLeaf, StringComparison.OrdinalIgnoreCase))
+                {
+                    dict = LoadThemeDictionary(fallbackLeaf);
+                    if (dict != null) leaf = fallbackLeaf;
+                }
+                if (dict == null) return;
+            }
+
             IsDark = dark;
             _loadedLeaf = leaf;
 
-            // Full pack URI rather than a relative one. A bare relative Source depends on
-            // an ambient base URI that isn't reliably present when loading from code, and
-            // the assembly name is read rather than hard-coded so renaming the output
-            // can't silently break the theme.
-            string asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Name
-                         ?? "AdvancedSnip";
+            // Replace atomically in-place (never Remove before Insert!) so Brush.* resources
+            // are NEVER missing from Application.Resources during a theme swap.
+            int existingIdx = _loadedDictionary != null
+                ? app.Resources.MergedDictionaries.IndexOf(_loadedDictionary)
+                : -1;
 
-            var dict = new System.Windows.ResourceDictionary
+            if (existingIdx >= 0)
             {
-                Source = new Uri($"pack://application:,,,/{asm};component/Themes/{leaf}.xaml",
-                                 UriKind.Absolute)
-            };
-
-            if (_loadedDictionary != null)
-                app.Resources.MergedDictionaries.Remove(_loadedDictionary);
-
-            // Insert at index 0 so anything the app merges later can still override.
-            app.Resources.MergedDictionaries.Insert(0, dict);
+                app.Resources.MergedDictionaries[existingIdx] = dict;
+            }
+            else
+            {
+                // Insert at index 0 so anything the app merges later can still override.
+                app.Resources.MergedDictionaries.Insert(0, dict);
+            }
             _loadedDictionary = dict;
 
             foreach (System.Windows.Window w in app.Windows)
                 ApplyToWindow(w);
 
             ThemeChanged?.Invoke(null, EventArgs.Empty);
+        }
+
+        private static System.Windows.ResourceDictionary? LoadThemeDictionary(string leaf)
+        {
+            string asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Name
+                         ?? "AdvancedSnip";
+
+            Uri[] candidates =
+            {
+                new Uri($"pack://application:,,,/{asm};component/Themes/{leaf}.xaml", UriKind.Absolute),
+                new Uri($"pack://application:,,,/Themes/{leaf}.xaml", UriKind.Absolute),
+                new Uri($"Themes/{leaf}.xaml", UriKind.Relative)
+            };
+
+            foreach (var uri in candidates)
+            {
+                try
+                {
+                    return new System.Windows.ResourceDictionary { Source = uri };
+                }
+                catch
+                {
+                    // Try next candidate pack URI format
+                }
+            }
+
+            return null;
         }
 
         private static System.Windows.ResourceDictionary? _loadedDictionary;

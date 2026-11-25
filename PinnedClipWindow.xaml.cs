@@ -215,13 +215,16 @@ namespace AdvancedSnip
             Loaded += (_, _) =>
             {
                 PinnedWindowManager.Register(this);
-                if (existingRecord != null && existingRecord.Width > 0 && existingRecord.Height > 0)
+                if (!_boundsApplied)
                 {
-                    ApplyRestoredBounds(existingRecord);
-                }
-                else
-                {
-                    PositionCenter();
+                    if (existingRecord != null && existingRecord.Width > 0 && existingRecord.Height > 0)
+                    {
+                        ApplyRestoredBounds(existingRecord);
+                    }
+                    else
+                    {
+                        PositionCenter();
+                    }
                 }
 
                 UpdateTopmostUI();
@@ -318,7 +321,7 @@ namespace AdvancedSnip
                 return IntPtr.Zero;
             }
 
-            if (msg == Win32.WM_WINDOWPOSCHANGING && IsSlappedToDesktop)
+            if (msg == Win32.WM_WINDOWPOSCHANGING && IsSlappedToDesktop && !_isOcrOverlayVisible)
             {
                 try
                 {
@@ -331,7 +334,7 @@ namespace AdvancedSnip
 
             if (msg == WM_NCHITTEST)
             {
-                if (IsSlappedToDesktop)
+                if (IsSlappedToDesktop && !_isOcrOverlayVisible)
                 {
                     const int HTTRANSPARENT = -1;
                     handled = true;
@@ -472,54 +475,75 @@ namespace AdvancedSnip
 
         private void ApplyRestoredBounds(PinnedItemRecord record)
         {
-            _zoomFactor = record.ZoomFactor > 0 ? record.ZoomFactor : 1.0;
-            ImageScale.ScaleX = _zoomFactor;
-            ImageScale.ScaleY = _zoomFactor;
-            ZoomText.Text = $"{Math.Round(_zoomFactor * 100):0}%";
+            var targetRect = new System.Drawing.Rectangle(
+                (int)record.X, (int)record.Y, (int)record.Width, (int)record.Height);
 
-            bool zoomed = Math.Abs(_zoomFactor - 1.0) > 0.01;
-            if (ZoomResetBtn != null)
+            _boundsApplied = true;
+            _isRestoringBounds = true;
+            try
             {
-                ZoomResetBtn.Visibility = zoomed ? Visibility.Visible : Visibility.Collapsed;
+                _zoomFactor = record.ZoomFactor > 0 ? record.ZoomFactor : 1.0;
+                ImageScale.ScaleX = _zoomFactor;
+                ImageScale.ScaleY = _zoomFactor;
+                ZoomText.Text = $"{Math.Round(_zoomFactor * 100):0}%";
+
+                bool zoomed = Math.Abs(_zoomFactor - 1.0) > 0.01;
+                if (ZoomResetBtn != null)
+                {
+                    ZoomResetBtn.Visibility = zoomed ? Visibility.Visible : Visibility.Collapsed;
+                }
+                ImageScrollViewer.HorizontalScrollBarVisibility = zoomed ? System.Windows.Controls.ScrollBarVisibility.Auto : System.Windows.Controls.ScrollBarVisibility.Disabled;
+                ImageScrollViewer.VerticalScrollBarVisibility = zoomed ? System.Windows.Controls.ScrollBarVisibility.Auto : System.Windows.Controls.ScrollBarVisibility.Disabled;
+
+                // Restored pins always start with Topmost = false on app restart
+                record.IsTopmost = false;
+                IsTopmost = false;
+                Topmost = false;
+                IsDesktopPinned = record.IsDesktopPinned;
+                IsFrameless = record.IsDesktopPinned && record.IsFrameless;
+
+                CurrentStretchMode = string.IsNullOrEmpty(record.StretchMode) ? "Uniform" : record.StretchMode;
+                SetStretchMode(CurrentStretchMode);
+
+                CurrentWindowOpacity = record.WindowOpacity > 0.15 ? record.WindowOpacity : 1.0;
+                CurrentImageOpacity = record.ImageOpacity > 0.15 ? record.ImageOpacity : 1.0;
+                SetWindowOpacity(CurrentWindowOpacity);
+                SetImageOpacity(CurrentImageOpacity);
+
+                CurrentRotation = record.RotationAngle;
+                CurrentFlipH = record.FlipHorizontal;
+                CurrentFlipV = record.FlipVertical;
+                UpdateTransforms();
+
+                if (!string.IsNullOrEmpty(record.Caption))
+                {
+                    DetailText.Text = record.Caption;
+                }
+
+                UpdateTopmostUI();
+                UpdateDesktopPinUI();
+                UpdateFramelessUI();
+
+                // Two-pass physical placement prevents mixed-DPI WM_DPICHANGED scaling from inflating
+                // windows restored onto a non-primary-DPI display (e.g., 125% secondary monitor).
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    WindowPlacement.SetBounds(this, targetRect, topMost: false, sendToBottom: true);
+                }
+
+                record.X = targetRect.X;
+                record.Y = targetRect.Y;
+                record.Width = targetRect.Width;
+                record.Height = targetRect.Height;
             }
-            ImageScrollViewer.HorizontalScrollBarVisibility = zoomed ? System.Windows.Controls.ScrollBarVisibility.Auto : System.Windows.Controls.ScrollBarVisibility.Disabled;
-            ImageScrollViewer.VerticalScrollBarVisibility = zoomed ? System.Windows.Controls.ScrollBarVisibility.Auto : System.Windows.Controls.ScrollBarVisibility.Disabled;
-
-            // Restored pins always start with Topmost = false on app restart
-            record.IsTopmost = false;
-            IsTopmost = false;
-            Topmost = false;
-            IsDesktopPinned = record.IsDesktopPinned;
-            IsFrameless = record.IsDesktopPinned && record.IsFrameless;
-
-            CurrentStretchMode = string.IsNullOrEmpty(record.StretchMode) ? "Uniform" : record.StretchMode;
-            SetStretchMode(CurrentStretchMode);
-
-            CurrentWindowOpacity = record.WindowOpacity > 0.15 ? record.WindowOpacity : 1.0;
-            CurrentImageOpacity = record.ImageOpacity > 0.15 ? record.ImageOpacity : 1.0;
-            SetWindowOpacity(CurrentWindowOpacity);
-            SetImageOpacity(CurrentImageOpacity);
-
-            CurrentRotation = record.RotationAngle;
-            CurrentFlipH = record.FlipHorizontal;
-            CurrentFlipV = record.FlipVertical;
-            UpdateTransforms();
-
-            if (!string.IsNullOrEmpty(record.Caption))
+            finally
             {
-                DetailText.Text = record.Caption;
+                _isRestoringBounds = false;
             }
 
-            UpdateTopmostUI();
-            UpdateDesktopPinUI();
-            UpdateFramelessUI();
-
-            WindowPlacement.SetBounds(this, new System.Drawing.Rectangle(
-                (int)record.X, (int)record.Y, (int)record.Width, (int)record.Height),
-                topMost: false, sendToBottom: true);
-
-            if (record.IsSlappedToDesktop)
+            if (record.IsSlappedToDesktop && !DeferInitialSlap && !_initialSlapQueued)
             {
+                _initialSlapQueued = true;
                 Dispatcher.BeginInvoke(new Action(() => SetSlappedToDesktop(true)), System.Windows.Threading.DispatcherPriority.Loaded);
             }
         }
@@ -554,7 +578,20 @@ namespace AdvancedSnip
             int x = area.X + (area.Width - w) / 2;
             int y = area.Y + (area.Height - h) / 2;
 
-            WindowPlacement.SetBounds(this, new System.Drawing.Rectangle(x, y, w, h), topMost: IsTopmost);
+            var targetRect = new System.Drawing.Rectangle(x, y, w, h);
+            _boundsApplied = true;
+            _isRestoringBounds = true;
+            try
+            {
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    WindowPlacement.SetBounds(this, targetRect, topMost: IsTopmost);
+                }
+            }
+            finally
+            {
+                _isRestoringBounds = false;
+            }
 
             UpdateRecordGeometry(x, y, w, h);
             PinnedWindowManager.SaveAll();
@@ -593,7 +630,7 @@ namespace AdvancedSnip
                 WindowShadow.BlurRadius = 38;
                 WindowShadow.ShadowDepth = 6;
                 WindowShadow.Opacity = 0.65;
-                WindowBorder.BorderBrush = (Brush)FindResource("Brush.Accent");
+                WindowBorder.SetResourceReference(Border.BorderBrushProperty, "Brush.Accent");
 
                 StackBadge.Visibility = Visibility.Visible;
                 StackBadgeText.Text = overlapCount > 1 ? $"{overlapCount + 1} stacked" : "Stacked";
@@ -603,7 +640,7 @@ namespace AdvancedSnip
                 WindowShadow.BlurRadius = 26;
                 WindowShadow.ShadowDepth = 4;
                 WindowShadow.Opacity = 0.45;
-                WindowBorder.BorderBrush = (Brush)FindResource("Brush.BorderStrong");
+                WindowBorder.SetResourceReference(Border.BorderBrushProperty, "Brush.BorderStrong");
 
                 StackBadge.Visibility = Visibility.Collapsed;
             }
@@ -671,7 +708,7 @@ namespace AdvancedSnip
 
         private void Window_LocationChanged(object sender, EventArgs e)
         {
-            if (!IsLoaded) return;
+            if (!IsLoaded || _isRestoringBounds || IsSlappedToDesktop) return;
             var rect = WindowPlacement.GetPhysicalRect(this);
             if (!rect.IsEmpty)
             {
@@ -679,14 +716,14 @@ namespace AdvancedSnip
             }
             if (_slapBadge != null)
             {
-                _slapBadge.UpdatePosition();
+                _slapBadge.UpdatePosition(rect);
             }
             PinnedWindowManager.CheckOverlaps();
         }
 
         private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            if (!IsLoaded) return;
+            if (!IsLoaded || _isRestoringBounds || IsSlappedToDesktop) return;
             var rect = WindowPlacement.GetPhysicalRect(this);
             if (!rect.IsEmpty)
             {
@@ -694,7 +731,7 @@ namespace AdvancedSnip
             }
             if (_slapBadge != null)
             {
-                _slapBadge.UpdatePosition();
+                _slapBadge.UpdatePosition(rect);
             }
             if (_isOcrModeActive)
             {
@@ -755,25 +792,25 @@ namespace AdvancedSnip
             {
                 if (IsTopmost)
                 {
-                    TopmostBtn.Background = (Brush)FindResource("Brush.AccentSoft");
-                    TopmostBtn.BorderBrush = (Brush)FindResource("Brush.Accent");
-                    TopmostIcon.Foreground = (Brush)FindResource("Brush.Accent");
-                    TopmostLabel.Foreground = (Brush)FindResource("Brush.TextHeading");
+                    TopmostBtn.SetResourceReference(Button.BackgroundProperty, "Brush.AccentSoft");
+                    TopmostBtn.SetResourceReference(Button.BorderBrushProperty, "Brush.Accent");
+                    TopmostIcon.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Accent");
+                    TopmostLabel.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextHeading");
                     TopmostBtn.ToolTip = "Always on Top: ON · Click to allow windows over it";
                 }
                 else
                 {
                     TopmostBtn.Background = Brushes.Transparent;
                     TopmostBtn.BorderBrush = Brushes.Transparent;
-                    TopmostIcon.Foreground = (Brush)FindResource("Brush.TextMuted");
-                    TopmostLabel.Foreground = (Brush)FindResource("Brush.TextMuted");
+                    TopmostIcon.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextMuted");
+                    TopmostLabel.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextMuted");
                     TopmostBtn.ToolTip = "Always on Top: OFF · Click to keep always on top";
                 }
             }
 
             if (OverlayTopmostIcon != null)
             {
-                OverlayTopmostIcon.Foreground = IsTopmost ? (Brush)FindResource("Brush.Accent") : (Brush)FindResource("Brush.TextMuted");
+                OverlayTopmostIcon.SetResourceReference(TextBlock.ForegroundProperty, IsTopmost ? "Brush.Accent" : "Brush.TextMuted");
             }
             if (OverlayTopmostBtn != null)
             {
@@ -815,10 +852,10 @@ namespace AdvancedSnip
             {
                 if (IsDesktopPinned)
                 {
-                    DesktopPinBtn.Background = (Brush)FindResource("Brush.AccentSoft");
-                    DesktopPinBtn.BorderBrush = (Brush)FindResource("Brush.Accent");
-                    DesktopIcon.Foreground = (Brush)FindResource("Brush.Accent");
-                    DesktopLabel.Foreground = (Brush)FindResource("Brush.TextHeading");
+                    DesktopPinBtn.SetResourceReference(Button.BackgroundProperty, "Brush.AccentSoft");
+                    DesktopPinBtn.SetResourceReference(Button.BorderBrushProperty, "Brush.Accent");
+                    DesktopIcon.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Accent");
+                    DesktopLabel.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextHeading");
                     DesktopPinBtn.ToolTip = "Pinned to Desktop (Saved across restarts) · Click to make temporary";
 
                     if (FramelessBtn != null) FramelessBtn.Visibility = Visibility.Visible;
@@ -827,8 +864,8 @@ namespace AdvancedSnip
                 {
                     DesktopPinBtn.Background = Brushes.Transparent;
                     DesktopPinBtn.BorderBrush = Brushes.Transparent;
-                    DesktopIcon.Foreground = (Brush)FindResource("Brush.TextMuted");
-                    DesktopLabel.Foreground = (Brush)FindResource("Brush.TextMuted");
+                    DesktopIcon.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextMuted");
+                    DesktopLabel.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextMuted");
                     DesktopPinBtn.ToolTip = "Pin to Desktop (Keep persistently across restarts)";
 
                     if (FramelessBtn != null) FramelessBtn.Visibility = Visibility.Collapsed;
@@ -881,9 +918,14 @@ namespace AdvancedSnip
                 if (HeaderCard != null) HeaderCard.Visibility = Visibility.Collapsed;
                 ImageBorder.CornerRadius = new CornerRadius(10.5);
                 WindowBorder.CornerRadius = new CornerRadius(12);
-                WindowBorder.BorderBrush = IsSlappedToDesktop
-                    ? new SolidColorBrush(System.Windows.Media.Color.FromArgb(70, 0, 120, 215))
-                    : (Brush)FindResource("Brush.Accent");
+                if (IsSlappedToDesktop)
+                {
+                    WindowBorder.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(70, 0, 120, 215));
+                }
+                else
+                {
+                    WindowBorder.SetResourceReference(Border.BorderBrushProperty, "Brush.Accent");
+                }
 
                 if (FramelessOverlay != null)
                 {
@@ -901,7 +943,7 @@ namespace AdvancedSnip
                 if (HeaderCard != null) HeaderCard.Visibility = Visibility.Visible;
                 ImageBorder.CornerRadius = new CornerRadius(0, 0, 10.5, 10.5);
                 WindowBorder.CornerRadius = new CornerRadius(12);
-                WindowBorder.BorderBrush = (Brush)FindResource("Brush.BorderStrong");
+                WindowBorder.SetResourceReference(Border.BorderBrushProperty, "Brush.BorderStrong");
 
                 if (FramelessOverlay != null)
                 {
@@ -916,10 +958,20 @@ namespace AdvancedSnip
 
             if (FramelessBtn != null)
             {
-                FramelessBtn.Background = IsFrameless ? (Brush)FindResource("Brush.AccentSoft") : Brushes.Transparent;
-                FramelessBtn.BorderBrush = IsFrameless ? (Brush)FindResource("Brush.Accent") : Brushes.Transparent;
-                FramelessIcon.Foreground = IsFrameless ? (Brush)FindResource("Brush.Accent") : (Brush)FindResource("Brush.TextMuted");
-                FramelessLabel.Foreground = IsFrameless ? (Brush)FindResource("Brush.TextHeading") : (Brush)FindResource("Brush.TextMuted");
+                if (IsFrameless)
+                {
+                    FramelessBtn.SetResourceReference(Button.BackgroundProperty, "Brush.AccentSoft");
+                    FramelessBtn.SetResourceReference(Button.BorderBrushProperty, "Brush.Accent");
+                    FramelessIcon.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Accent");
+                    FramelessLabel.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextHeading");
+                }
+                else
+                {
+                    FramelessBtn.Background = Brushes.Transparent;
+                    FramelessBtn.BorderBrush = Brushes.Transparent;
+                    FramelessIcon.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextMuted");
+                    FramelessLabel.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextMuted");
+                }
             }
         }
 
@@ -992,20 +1044,44 @@ namespace AdvancedSnip
         }
 
         public bool IsSlappedToDesktop { get; private set; }
+        internal bool DeferInitialSlap { get; set; }
         private SlapExitBadgeWindow? _slapBadge;
         private bool _wasFramelessBeforeSlap;
         private bool _wasTopmostBeforeSlap;
+        private bool _isRestoringBounds;
+        private bool _boundsApplied;
+        private bool _initialSlapQueued;
+        private bool _isOcrOverlayVisible;
+
+        private System.Drawing.Rectangle GetCurrentSlapRect()
+        {
+            if (Visibility != Visibility.Visible && Record != null && Record.Width > 0 && Record.Height > 0)
+            {
+                return new System.Drawing.Rectangle((int)Record.X, (int)Record.Y, (int)Record.Width, (int)Record.Height);
+            }
+            var rect = WindowPlacement.GetPhysicalRect(this);
+            if (!rect.IsEmpty) return rect;
+            if (Record != null && Record.Width > 0 && Record.Height > 0)
+            {
+                return new System.Drawing.Rectangle((int)Record.X, (int)Record.Y, (int)Record.Width, (int)Record.Height);
+            }
+            return System.Drawing.Rectangle.Empty;
+        }
+
+        internal void RefreshSlapBadgePosition()
+        {
+            if (!IsSlappedToDesktop || _slapBadge == null) return;
+            var rect = GetCurrentSlapRect();
+            if (!rect.IsEmpty)
+            {
+                _slapBadge.UpdatePosition(rect);
+            }
+        }
 
         public void SetSlappedToDesktop(bool on)
         {
             if (IsSlappedToDesktop == on) return;
             IsSlappedToDesktop = on;
-
-            var currentRect = WindowPlacement.GetPhysicalRect(this);
-            if (currentRect.IsEmpty && Record != null)
-            {
-                currentRect = new System.Drawing.Rectangle((int)Record.X, (int)Record.Y, (int)Record.Width, (int)Record.Height);
-            }
 
             if (on)
             {
@@ -1031,37 +1107,50 @@ namespace AdvancedSnip
 
                 UpdateLayout();
 
-                bool slappedInWorkerW = false;
-                var bmp = CreateSlapBitmap();
-                if (bmp != null && Record != null)
+                // Read physical rect AFTER frameless layout settles
+                var currentRect = GetCurrentSlapRect();
+
+                bool slappedOnWallpaper = false;
+                if (Record != null && !currentRect.IsEmpty)
                 {
-                    slappedInWorkerW = DesktopWallpaperHost.Slap(
-                        Record.Id.ToString(),
-                        bmp,
-                        (float)CurrentImageOpacity,
-                        currentRect.X,
-                        currentRect.Y,
-                        currentRect.Width,
-                        currentRect.Height);
+                    using var bmp = CreateSlapBitmap(currentRect.Width, currentRect.Height);
+                    if (bmp != null)
+                    {
+                        slappedOnWallpaper = DesktopWallpaperHost.Slap(
+                            Record.Id.ToString(),
+                            bmp,
+                            (float)CurrentImageOpacity,
+                            currentRect.X,
+                            currentRect.Y,
+                            currentRect.Width,
+                            currentRect.Height);
+                    }
                 }
 
-                if (slappedInWorkerW)
+                if (slappedOnWallpaper)
                 {
-                    // Snappy 90ms micro-fade out into the wallpaper layer for a seamless, stutter-free handoff
-                    var fadeOut = new DoubleAnimation(0.0, TimeSpan.FromMilliseconds(90))
+                    // Snappy 90ms micro-fade out into the wallpaper layer; clear animation hold and guard race
+                    var fadeOut = new DoubleAnimation(1.0, 0.0, TimeSpan.FromMilliseconds(90))
                     {
-                        EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                        EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+                        FillBehavior = FillBehavior.Stop
                     };
                     fadeOut.Completed += (_, _) =>
                     {
-                        Visibility = Visibility.Collapsed;
-                        Opacity = CurrentWindowOpacity;
+                        BeginAnimation(UIElement.OpacityProperty, null);
+                        Opacity = 1.0;
+                        if (IsSlappedToDesktop && !_isOcrOverlayVisible)
+                        {
+                            Visibility = Visibility.Collapsed;
+                        }
                     };
                     BeginAnimation(UIElement.OpacityProperty, fadeOut);
                 }
                 else
                 {
-                    // Fallback to desktop layer styles if WorkerW cannot be isolated
+                    // Fallback to desktop layer styles if wallpaper composition cannot be applied
+                    BeginAnimation(UIElement.OpacityProperty, null);
+                    Opacity = 1.0;
                     Visibility = Visibility.Visible;
                     Show();
                     ApplyDesktopLayerStyles(true, currentRect);
@@ -1069,22 +1158,37 @@ namespace AdvancedSnip
 
                 if (_slapBadge == null)
                 {
-                    _slapBadge = new SlapExitBadgeWindow(this, currentRect);
+                    var badge = new SlapExitBadgeWindow(this, currentRect);
+                    badge.Closed += (_, _) =>
+                    {
+                        if (ReferenceEquals(_slapBadge, badge))
+                        {
+                            _slapBadge = null;
+                        }
+                    };
+                    _slapBadge = badge;
+                    _slapBadge.Show();
                 }
                 else
                 {
                     _slapBadge.UpdatePosition(currentRect);
+                    if (!_slapBadge.IsVisible)
+                    {
+                        _slapBadge.Show();
+                    }
                 }
-                _slapBadge.Show();
 
                 if (ContextSlap != null) ContextSlap.IsChecked = true;
             }
             else
             {
+                var currentRect = GetCurrentSlapRect();
+
                 if (_slapBadge != null)
                 {
-                    _slapBadge.Close();
+                    var badge = _slapBadge;
                     _slapBadge = null;
+                    try { badge.Close(); } catch { }
                 }
 
                 if (Record != null)
@@ -1094,14 +1198,27 @@ namespace AdvancedSnip
 
                 ApplyDesktopLayerStyles(false, currentRect);
 
-                // Restore interactive WPF window with snappy 90ms micro-fade in
+                // Restore interactive WPF window with snappy 90ms micro-fade in back to Opacity = 1.0
+                // (WindowBorder/HeaderCard carry CurrentWindowOpacity so image isn't double-dimmed)
+                BeginAnimation(UIElement.OpacityProperty, null);
                 Opacity = 0.0;
                 Visibility = Visibility.Visible;
                 Show();
 
-                var fadeIn = new DoubleAnimation(CurrentWindowOpacity, TimeSpan.FromMilliseconds(90))
+                if (!currentRect.IsEmpty)
                 {
-                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                    WindowPlacement.SetBounds(this, currentRect, topMost: _wasTopmostBeforeSlap);
+                }
+
+                var fadeIn = new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(90))
+                {
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+                    FillBehavior = FillBehavior.Stop
+                };
+                fadeIn.Completed += (_, _) =>
+                {
+                    BeginAnimation(UIElement.OpacityProperty, null);
+                    Opacity = 1.0;
                 };
                 BeginAnimation(UIElement.OpacityProperty, fadeIn);
 
@@ -1172,97 +1289,356 @@ namespace AdvancedSnip
             }
         }
 
-        private System.Drawing.Bitmap? CreateSlapBitmap()
+        private static System.Drawing.Bitmap? BitmapSourceToDrawingBitmap(BitmapSource source)
         {
+            if (source == null || source.PixelWidth <= 0 || source.PixelHeight <= 0) return null;
             try
             {
-                System.Drawing.Bitmap? bmp = null;
-                if (_annotations.Count > 0 || _hyperlinks.Count > 0)
+                BitmapSource src = source.Format == PixelFormats.Bgra32
+                    ? source
+                    : new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+
+                int w = src.PixelWidth;
+                int h = src.PixelHeight;
+                var bmp = new System.Drawing.Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                var data = bmp.LockBits(
+                    new System.Drawing.Rectangle(0, 0, w, h),
+                    System.Drawing.Imaging.ImageLockMode.WriteOnly,
+                    System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                try
                 {
-                    var annotated = GetAnnotatedImageBitmap();
-                    using var ms = new MemoryStream();
-                    var encoder = new PngBitmapEncoder();
-                    encoder.Frames.Add(BitmapFrame.Create(annotated));
-                    encoder.Save(ms);
-                    ms.Position = 0;
-                    bmp = new System.Drawing.Bitmap(ms);
+                    src.CopyPixels(Int32Rect.Empty, data.Scan0, data.Stride * h, data.Stride);
                 }
-                else if (!string.IsNullOrEmpty(Record?.CachedImagePath) && File.Exists(Record.CachedImagePath))
+                finally
                 {
-                    using var stream = new FileStream(Record.CachedImagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                    bmp = new System.Drawing.Bitmap(stream);
+                    bmp.UnlockBits(data);
                 }
-                else if (!string.IsNullOrEmpty(_filePath) && File.Exists(_filePath))
+                return bmp;
+            }
+            catch
+            {
+                using var ms = new MemoryStream();
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(source));
+                encoder.Save(ms);
+                ms.Position = 0;
+                using var tmp = new System.Drawing.Bitmap(ms);
+                return new System.Drawing.Bitmap(tmp);
+            }
+        }
+
+        private System.Drawing.Bitmap? CaptureLiveViewportBitmap(int targetPxW, int targetPxH)
+        {
+            if (!IsLoaded || ImageBorder == null || ImageViewportGrid == null || RootWindowGrid == null || PinnedImage == null)
+                return null;
+            if (targetPxW <= 0 || targetPxH <= 0)
+                return null;
+            if (ActualWidth <= 0 || ActualHeight <= 0 || ImageBorder.ActualWidth <= 0 || ImageBorder.ActualHeight <= 0)
+                return null;
+
+            double prevImageOpacity = PinnedImage.Opacity;
+            Visibility prevFramelessVis = FramelessOverlay?.Visibility ?? Visibility.Collapsed;
+            var prevHBar = ImageScrollViewer?.HorizontalScrollBarVisibility ?? System.Windows.Controls.ScrollBarVisibility.Disabled;
+            var prevVBar = ImageScrollViewer?.VerticalScrollBarVisibility ?? System.Windows.Controls.ScrollBarVisibility.Disabled;
+            double prevHOff = ImageScrollViewer?.HorizontalOffset ?? 0;
+            double prevVOff = ImageScrollViewer?.VerticalOffset ?? 0;
+            bool changedScrollBars = false;
+
+            try
+            {
+                // Render PinnedImage at full opacity because DesktopWallpaperHost applies CurrentImageOpacity.
+                PinnedImage.Opacity = 1.0;
+                if (FramelessOverlay != null)
                 {
-                    using var stream = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                    bmp = new System.Drawing.Bitmap(stream);
-                }
-                else if (_imageSource != null)
-                {
-                    using var ms = new MemoryStream();
-                    var encoder = new PngBitmapEncoder();
-                    encoder.Frames.Add(BitmapFrame.Create(_imageSource));
-                    encoder.Save(ms);
-                    ms.Position = 0;
-                    bmp = new System.Drawing.Bitmap(ms);
+                    FramelessOverlay.Visibility = Visibility.Collapsed;
                 }
 
-                if (bmp != null)
+                // Switch Auto/Visible scrollbars to Hidden during capture: preserves ScrollViewer's
+                // exact infinite-measure zoom scale and scroll offsets while removing the 11px scrollbar chrome.
+                if (ImageScrollViewer != null)
                 {
-                    var rf = GetRotateFlipType(CurrentRotation, CurrentFlipH, CurrentFlipV);
-                    if (rf != System.Drawing.RotateFlipType.RotateNoneFlipNone)
+                    if (prevHBar == System.Windows.Controls.ScrollBarVisibility.Auto ||
+                        prevHBar == System.Windows.Controls.ScrollBarVisibility.Visible)
                     {
-                        bmp.RotateFlip(rf);
+                        ImageScrollViewer.HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Hidden;
+                        changedScrollBars = true;
+                    }
+                    if (prevVBar == System.Windows.Controls.ScrollBarVisibility.Auto ||
+                        prevVBar == System.Windows.Controls.ScrollBarVisibility.Visible)
+                    {
+                        ImageScrollViewer.VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Hidden;
+                        changedScrollBars = true;
+                    }
+                    if (changedScrollBars)
+                    {
+                        ImageScrollViewer.UpdateLayout();
+                        ImageScrollViewer.ScrollToHorizontalOffset(prevHOff);
+                        ImageScrollViewer.ScrollToVerticalOffset(prevVOff);
+                        ImageScrollViewer.UpdateLayout();
                     }
                 }
 
-                return bmp;
+                // Exact physical pixel-per-DIP scale WPF is laying this window out at.
+                double scaleX = targetPxW / ActualWidth;
+                double scaleY = targetPxH / ActualHeight;
+                if (scaleX <= 0.05 || scaleX > 20.0 || scaleY <= 0.05 || scaleY > 20.0)
+                    return null;
+
+                double dpiX = 96.0 * scaleX;
+                double dpiY = 96.0 * scaleY;
+
+                // ImageBorder has ClipToBounds="True", so its rendered bounds match its exact layout rect
+                // even in UniformToFill / zoomed modes where PinnedImage overflows the viewport.
+                Point topLeftDip = ImageBorder.TransformToAncestor(RootWindowGrid).Transform(new Point(0, 0));
+                double vpDipW = ImageBorder.ActualWidth;
+                double vpDipH = ImageBorder.ActualHeight;
+
+                // Render directly via DrawingVisual with VisualBrush clipped cleanly to ImageBorder's rect.
+                // Using Relative Viewbox (0,0,1,1) on ImageBorder (which has ClipToBounds="True") avoids
+                // descendant overflow shifting the VisualBrush origin.
+                var dv = new DrawingVisual();
+                using (var dc = dv.RenderOpen())
+                {
+                    var targetRectDip = new Rect(topLeftDip.X, topLeftDip.Y, vpDipW, vpDipH);
+                    dc.PushClip(new RectangleGeometry(targetRectDip));
+                    var vb = new VisualBrush(ImageBorder)
+                    {
+                        Stretch = Stretch.None,
+                        AlignmentX = AlignmentX.Left,
+                        AlignmentY = AlignmentY.Top
+                    };
+                    dc.DrawRectangle(vb, null, targetRectDip);
+                    dc.Pop();
+                }
+
+                var rtb = new RenderTargetBitmap(targetPxW, targetPxH, dpiX, dpiY, PixelFormats.Pbgra32);
+                rtb.Render(dv);
+                rtb.Freeze();
+
+                return BitmapSourceToDrawingBitmap(rtb);
             }
             catch
             {
                 return null;
             }
+            finally
+            {
+                PinnedImage.Opacity = prevImageOpacity;
+                if (FramelessOverlay != null)
+                {
+                    FramelessOverlay.Visibility = prevFramelessVis;
+                }
+                if (ImageScrollViewer != null && changedScrollBars)
+                {
+                    ImageScrollViewer.HorizontalScrollBarVisibility = prevHBar;
+                    ImageScrollViewer.VerticalScrollBarVisibility = prevVBar;
+                    ImageScrollViewer.UpdateLayout();
+                    ImageScrollViewer.ScrollToHorizontalOffset(prevHOff);
+                    ImageScrollViewer.ScrollToVerticalOffset(prevVOff);
+                }
+            }
+        }
+
+        private System.Drawing.Bitmap? CreateSlapBitmap(int targetPxW = 0, int targetPxH = 0)
+        {
+            // Preferred path: capture the exact live WPF canvas so StretchMode (Uniform /
+            // UniformToFill / Fill / Actual), ZoomFactor, ScrollViewer offsets, Rotation/Flip,
+            // annotations, and monitor DPI match the floating window 1:1 with zero zoom shift.
+            if (targetPxW > 0 && targetPxH > 0 && Visibility == Visibility.Visible)
+            {
+                var liveCapture = CaptureLiveViewportBitmap(targetPxW, targetPxH);
+                if (liveCapture != null)
+                {
+                    return liveCapture;
+                }
+            }
+
+            System.Drawing.Bitmap? rawBmp = null;
+            try
+            {
+                if (_annotations.Count > 0 || _hyperlinks.Count > 0)
+                {
+                    rawBmp = BitmapSourceToDrawingBitmap(GetAnnotatedImageBitmap());
+                }
+                else if (_imageSource != null)
+                {
+                    rawBmp = BitmapSourceToDrawingBitmap(_imageSource);
+                }
+                else if (!string.IsNullOrEmpty(Record?.CachedImagePath) && File.Exists(Record.CachedImagePath))
+                {
+                    using var stream = new FileStream(Record.CachedImagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    using var tmp = new System.Drawing.Bitmap(stream);
+                    rawBmp = new System.Drawing.Bitmap(tmp);
+                }
+                else if (!string.IsNullOrEmpty(_filePath) && File.Exists(_filePath))
+                {
+                    using var stream = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    using var tmp = new System.Drawing.Bitmap(stream);
+                    rawBmp = new System.Drawing.Bitmap(tmp);
+                }
+
+                if (rawBmp == null) return null;
+
+                var rf = GetRotateFlipType(CurrentRotation, CurrentFlipH, CurrentFlipV);
+                if (rf != System.Drawing.RotateFlipType.RotateNoneFlipNone)
+                {
+                    rawBmp.RotateFlip(rf);
+                }
+
+                if (targetPxW <= 0 || targetPxH <= 0)
+                {
+                    var passthrough = rawBmp;
+                    rawBmp = null;
+                    return passthrough;
+                }
+
+                // Fallback math matching WPF's ScrollViewer + LayoutTransform + Stretch behavior
+                var rect = GetCurrentSlapRect();
+                var mon = rect.IsEmpty ? DisplayInfo.FromCursor() : DisplayInfo.FromRect(rect);
+                double dpiScale = mon.Scale <= 0 ? 1.0 : mon.Scale;
+                float inset = (float)Math.Round(1.5 * dpiScale);
+
+                float contentW = Math.Max(1f, targetPxW - inset * 2f);
+                float contentH = Math.Max(1f, targetPxH - inset * 2f);
+                float imgW = rawBmp.Width;
+                float imgH = rawBmp.Height;
+                float zoom = (float)Math.Max(0.1, _zoomFactor);
+
+                bool scrollingEnabled = ImageScrollViewer != null &&
+                    (ImageScrollViewer.HorizontalScrollBarVisibility != System.Windows.Controls.ScrollBarVisibility.Disabled ||
+                     ImageScrollViewer.VerticalScrollBarVisibility != System.Windows.Controls.ScrollBarVisibility.Disabled);
+
+                // In WPF, when ScrollViewer scrollbars are Auto (zoomed or Actual mode), Image measures
+                // against Infinity at its natural DIP size (PixelWidth * 96 / DpiX) scaled by _zoomFactor.
+                // When scrollbars are Disabled (Fill / UniformToFill / unzoomed Uniform), LayoutTransform
+                // is constrained to the viewport so the image fits contentW x contentH at effective scale 1.0.
+                double srcDpiX = _imageSource != null && _imageSource.DpiX > 1 ? _imageSource.DpiX : 96.0;
+                double srcDpiY = _imageSource != null && _imageSource.DpiY > 1 ? _imageSource.DpiY : 96.0;
+                float naturalPxW = (float)(imgW * (96.0 / srcDpiX) * dpiScale);
+                float naturalPxH = (float)(imgH * (96.0 / srcDpiY) * dpiScale);
+
+                float drawW, drawH;
+                if (scrollingEnabled)
+                {
+                    drawW = naturalPxW * zoom;
+                    drawH = naturalPxH * zoom;
+                }
+                else
+                {
+                    switch (CurrentStretchMode)
+                    {
+                        case "Fill":
+                            drawW = contentW;
+                            drawH = contentH;
+                            break;
+
+                        case "UniformToFill":
+                        {
+                            float s = Math.Max(contentW / imgW, contentH / imgH);
+                            drawW = imgW * s;
+                            drawH = imgH * s;
+                            break;
+                        }
+
+                        case "Actual":
+                            drawW = naturalPxW * zoom;
+                            drawH = naturalPxH * zoom;
+                            break;
+
+                        case "Uniform":
+                        default:
+                        {
+                            float s = Math.Min(contentW / imgW, contentH / imgH);
+                            drawW = imgW * s;
+                            drawH = imgH * s;
+                            break;
+                        }
+                    }
+                }
+
+                float drawX = inset + (contentW - drawW) / 2f;
+                float drawY = inset + (contentH - drawH) / 2f;
+
+                if (ImageScrollViewer != null && scrollingEnabled)
+                {
+                    if (ImageScrollViewer.ScrollableWidth > 0.5 && drawW > contentW)
+                    {
+                        double ratioX = Math.Clamp(ImageScrollViewer.HorizontalOffset / ImageScrollViewer.ScrollableWidth, 0.0, 1.0);
+                        drawX = inset - (float)(ratioX * (drawW - contentW));
+                    }
+                    if (ImageScrollViewer.ScrollableHeight > 0.5 && drawH > contentH)
+                    {
+                        double ratioY = Math.Clamp(ImageScrollViewer.VerticalOffset / ImageScrollViewer.ScrollableHeight, 0.0, 1.0);
+                        drawY = inset - (float)(ratioY * (drawH - contentH));
+                    }
+                }
+
+                var result = new System.Drawing.Bitmap(targetPxW, targetPxH, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (var g = System.Drawing.Graphics.FromImage(result))
+                {
+                    g.Clear(System.Drawing.Color.Transparent);
+                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                    g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                    g.SetClip(new System.Drawing.RectangleF(inset, inset, contentW, contentH));
+                    g.DrawImage(rawBmp, new System.Drawing.RectangleF(drawX, drawY, drawW, drawH),
+                        new System.Drawing.RectangleF(0, 0, imgW, imgH), System.Drawing.GraphicsUnit.Pixel);
+                }
+
+                return result;
+            }
+            catch
+            {
+                return null;
+            }
+            finally
+            {
+                rawBmp?.Dispose();
+            }
         }
 
         private static System.Drawing.RotateFlipType GetRotateFlipType(int rotation, bool flipH, bool flipV)
         {
+            // XAML TransformGroup applies Flip FIRST, then Rotate.
+            // GDI+ RotateFlipType applies Rotate FIRST, then Flip.
+            // For 90° and 270°, a single FlipX/FlipY before rotation maps to the opposite flip axis after rotation.
             int r = (rotation % 360 + 360) % 360;
             if (!flipH && !flipV)
             {
                 return r switch
                 {
-                    90 => System.Drawing.RotateFlipType.Rotate90FlipNone,
+                    90  => System.Drawing.RotateFlipType.Rotate90FlipNone,
                     180 => System.Drawing.RotateFlipType.Rotate180FlipNone,
                     270 => System.Drawing.RotateFlipType.Rotate270FlipNone,
-                    _ => System.Drawing.RotateFlipType.RotateNoneFlipNone
+                    _   => System.Drawing.RotateFlipType.RotateNoneFlipNone
                 };
             }
             if (flipH && !flipV)
             {
                 return r switch
                 {
-                    90 => System.Drawing.RotateFlipType.Rotate90FlipX,
+                    90  => System.Drawing.RotateFlipType.Rotate90FlipY,
                     180 => System.Drawing.RotateFlipType.Rotate180FlipX,
-                    270 => System.Drawing.RotateFlipType.Rotate270FlipX,
-                    _ => System.Drawing.RotateFlipType.RotateNoneFlipX
+                    270 => System.Drawing.RotateFlipType.Rotate270FlipY,
+                    _   => System.Drawing.RotateFlipType.RotateNoneFlipX
                 };
             }
             if (!flipH && flipV)
             {
                 return r switch
                 {
-                    90 => System.Drawing.RotateFlipType.Rotate90FlipY,
+                    90  => System.Drawing.RotateFlipType.Rotate90FlipX,
                     180 => System.Drawing.RotateFlipType.Rotate180FlipY,
-                    270 => System.Drawing.RotateFlipType.Rotate270FlipY,
-                    _ => System.Drawing.RotateFlipType.RotateNoneFlipY
+                    270 => System.Drawing.RotateFlipType.Rotate270FlipX,
+                    _   => System.Drawing.RotateFlipType.RotateNoneFlipY
                 };
             }
             return r switch
             {
-                90 => System.Drawing.RotateFlipType.Rotate90FlipXY,
+                90  => System.Drawing.RotateFlipType.Rotate90FlipXY,
                 180 => System.Drawing.RotateFlipType.Rotate180FlipXY,
                 270 => System.Drawing.RotateFlipType.Rotate270FlipXY,
-                _ => System.Drawing.RotateFlipType.RotateNoneFlipXY
+                _   => System.Drawing.RotateFlipType.RotateNoneFlipXY
             };
         }
 
@@ -1270,12 +1646,14 @@ namespace AdvancedSnip
         {
             if (Record != null && IsSlappedToDesktop)
             {
+                IsSlappedToDesktop = false;
                 DesktopWallpaperHost.Unslap(Record.Id.ToString(), 0, 0, 0, 0);
             }
             if (_slapBadge != null)
             {
-                try { _slapBadge.Close(); } catch { }
+                var badge = _slapBadge;
                 _slapBadge = null;
+                try { badge.Close(); } catch { }
             }
             base.OnClosed(e);
         }
@@ -1286,12 +1664,14 @@ namespace AdvancedSnip
         {
             if (Record != null && IsSlappedToDesktop)
             {
+                IsSlappedToDesktop = false;
                 DesktopWallpaperHost.Unslap(Record.Id.ToString(), 0, 0, 0, 0);
             }
             if (_slapBadge != null)
             {
-                _slapBadge.Close();
+                var badge = _slapBadge;
                 _slapBadge = null;
+                try { badge.Close(); } catch { }
             }
             if (Record != null)
             {
@@ -1904,22 +2284,25 @@ namespace AdvancedSnip
 
             if (IsSlappedToDesktop && Record != null)
             {
-                var currentRect = WindowPlacement.GetPhysicalRect(this);
-                if (currentRect.IsEmpty)
+                // Update opacity in-place on the already pixel-calibrated slap bitmap when active
+                if (!DesktopWallpaperHost.UpdateOpacity(Record.Id.ToString(), (float)CurrentImageOpacity))
                 {
-                    currentRect = new System.Drawing.Rectangle((int)Record.X, (int)Record.Y, (int)Record.Width, (int)Record.Height);
-                }
-                var bmp = CreateSlapBitmap();
-                if (bmp != null)
-                {
-                    DesktopWallpaperHost.Slap(
-                        Record.Id.ToString(),
-                        bmp,
-                        (float)CurrentImageOpacity,
-                        currentRect.X,
-                        currentRect.Y,
-                        currentRect.Width,
-                        currentRect.Height);
+                    var currentRect = GetCurrentSlapRect();
+                    if (!currentRect.IsEmpty)
+                    {
+                        using var bmp = CreateSlapBitmap(currentRect.Width, currentRect.Height);
+                        if (bmp != null)
+                        {
+                            DesktopWallpaperHost.Slap(
+                                Record.Id.ToString(),
+                                bmp,
+                                (float)CurrentImageOpacity,
+                                currentRect.X,
+                                currentRect.Y,
+                                currentRect.Width,
+                                currentRect.Height);
+                        }
+                    }
                 }
             }
         }
@@ -2114,18 +2497,31 @@ namespace AdvancedSnip
             if (IsSlappedToDesktop)
             {
                 _wasSlappedBeforeOcr = true;
-                var currentRect = WindowPlacement.GetPhysicalRect(this);
-                if (currentRect.IsEmpty && Record != null)
+                _isOcrOverlayVisible = true;
+
+                var handle = new WindowInteropHelper(this).Handle;
+                if (handle != IntPtr.Zero)
                 {
-                    currentRect = new System.Drawing.Rectangle((int)Record.X, (int)Record.Y, (int)Record.Width, (int)Record.Height);
+                    int ex = Win32.GetWindowLong(handle, Win32.GWL_EXSTYLE);
+                    ex &= ~Win32.WS_EX_TRANSPARENT;
+                    ex &= ~Win32.WS_EX_NOACTIVATE;
+                    Win32.SetWindowLong(handle, Win32.GWL_EXSTYLE, ex);
                 }
-                if (!currentRect.IsEmpty)
-                {
-                    WindowPlacement.SetBounds(this, currentRect, topMost: true);
-                }
+
+                var currentRect = GetCurrentSlapRect();
+                BeginAnimation(UIElement.OpacityProperty, null);
+                Opacity = 1.0;
                 Visibility = Visibility.Visible;
                 Topmost = true;
                 Show();
+
+                if (!currentRect.IsEmpty)
+                {
+                    for (int pass = 0; pass < 2; pass++)
+                    {
+                        WindowPlacement.SetBounds(this, currentRect, topMost: true);
+                    }
+                }
                 BringToTop();
                 Activate();
             }
@@ -2146,6 +2542,7 @@ namespace AdvancedSnip
                     if (_wasSlappedBeforeOcr || IsSlappedToDesktop)
                     {
                         _wasSlappedBeforeOcr = false;
+                        _isOcrOverlayVisible = false;
                         Visibility = Visibility.Collapsed;
                         Topmost = false;
                     }
@@ -2176,6 +2573,7 @@ namespace AdvancedSnip
                 if (_wasSlappedBeforeOcr || IsSlappedToDesktop)
                 {
                     _wasSlappedBeforeOcr = false;
+                    _isOcrOverlayVisible = false;
                     Visibility = Visibility.Collapsed;
                     Topmost = false;
                 }
@@ -2213,9 +2611,10 @@ namespace AdvancedSnip
             if (_wasSlappedBeforeOcr || IsSlappedToDesktop)
             {
                 _wasSlappedBeforeOcr = false;
+                _isOcrOverlayVisible = false;
                 Visibility = Visibility.Collapsed;
                 Topmost = false;
-                _slapBadge?.UpdatePosition();
+                RefreshSlapBadgePosition();
             }
         }
 
@@ -2802,11 +3201,11 @@ namespace AdvancedSnip
                 Text = string.IsNullOrEmpty(link.Label) ? link.Url ?? "Link" : link.Label,
                 FontSize = 11,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)FindResource("Brush.TextHeading"),
                 VerticalAlignment = VerticalAlignment.Center,
                 MaxWidth = 180,
                 TextTrimming = TextTrimming.CharacterEllipsis
             };
+            label.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextHeading");
             sp.Children.Add(label);
 
             // Launch arrow glyph
@@ -2821,6 +3220,16 @@ namespace AdvancedSnip
             sp.Children.Add(extIcon);
 
             // Hover delete button
+            var delGlyph = new TextBlock
+            {
+                Text = "\uE711",
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = 8,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            delGlyph.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Danger");
+
             var delBtn = new Border
             {
                 Width = 14,
@@ -2831,15 +3240,7 @@ namespace AdvancedSnip
                 Cursor = Cursors.Hand,
                 Visibility = Visibility.Collapsed,
                 ToolTip = "Delete this link button",
-                Child = new TextBlock
-                {
-                    Text = "\uE711",
-                    FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                    FontSize = 8,
-                    Foreground = (Brush)FindResource("Brush.Danger"),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                }
+                Child = delGlyph
             };
             delBtn.MouseLeftButtonDown += (s, e) =>
             {
@@ -3127,9 +3528,9 @@ namespace AdvancedSnip
 
             if (AnnotateBtn != null)
             {
-                AnnotateBtn.Background = (Brush)FindResource("Brush.AccentSoft");
-                AnnotateBtn.BorderBrush = (Brush)FindResource("Brush.Accent");
-                AnnotateIcon.Foreground = (Brush)FindResource("Brush.Accent");
+                AnnotateBtn.SetResourceReference(Button.BackgroundProperty, "Brush.AccentSoft");
+                AnnotateBtn.SetResourceReference(Button.BorderBrushProperty, "Brush.Accent");
+                AnnotateIcon.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Accent");
             }
 
             if (CopyStatusText != null)
@@ -3166,7 +3567,7 @@ namespace AdvancedSnip
             {
                 AnnotateBtn.Background = Brushes.Transparent;
                 AnnotateBtn.BorderBrush = Brushes.Transparent;
-                AnnotateIcon.Foreground = (Brush)FindResource("Brush.Accent");
+                AnnotateIcon.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Accent");
             }
 
             if (CopyStatusText != null) CopyStatusText.Text = "";
@@ -3444,7 +3845,13 @@ namespace AdvancedSnip
                 if (ColorSwatchBlue != null) ColorSwatchBlue.BorderBrush = hex == "#FF3B82F6" ? Brushes.White : Brushes.Transparent;
                 if (ColorSwatchGreen != null) ColorSwatchGreen.BorderBrush = hex == "#FF10B981" ? Brushes.White : Brushes.Transparent;
                 if (ColorSwatchAmber != null) ColorSwatchAmber.BorderBrush = hex == "#FFF59E0B" ? Brushes.White : Brushes.Transparent;
-                if (ColorSwatchWhite != null) ColorSwatchWhite.BorderBrush = hex == "#FFFFFFFF" ? (Brush)FindResource("Brush.Accent") : Brushes.Transparent;
+                if (ColorSwatchWhite != null)
+                {
+                    if (hex == "#FFFFFFFF")
+                        ColorSwatchWhite.SetResourceReference(Border.BorderBrushProperty, "Brush.Accent");
+                    else
+                        ColorSwatchWhite.BorderBrush = Brushes.Transparent;
+                }
             }
         }
 

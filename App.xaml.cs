@@ -187,7 +187,6 @@ namespace AdvancedSnip
                 catch { }
 
                 try { DesktopWallpaperHost.Shutdown(); } catch { }
-                try { DesktopWallpaperHost.ForceDesktopShellRefresh(); } catch { }
             }
             catch { }
         }
@@ -217,7 +216,6 @@ namespace AdvancedSnip
             catch { }
 
             try { DesktopWallpaperHost.Shutdown(); } catch { }
-            try { DesktopWallpaperHost.ForceDesktopShellRefresh(); } catch { }
             try { _recorder?.Stop(); } catch { }
             try { TearDownRecordingUi(); } catch { }
             try { _ocr.Stop(); } catch { }

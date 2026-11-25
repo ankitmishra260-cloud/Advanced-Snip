@@ -24,8 +24,8 @@
     <SolidColorBrush x:Key="Brush.Card"         Color="#FF2B2F38" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Input"        Color="#FF33383F" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Subtle"       Color="#FF2F333B" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.Hover"        Color="#FF38455B" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.NavActive"    Color="#FF25344A" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Hover"        Color="#FF313B4C" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.NavActive"    Color="#FF223045" po:Freeze="True"/>
 
     <!-- The outer edge of the window itself. WindowChrome runs with
          GlassFrameThickness="0", so Windows draws no frame here and the app
@@ -34,7 +34,7 @@
 
     <!-- Lines -->
     <SolidColorBrush x:Key="Brush.Border"       Color="#FF3E4450" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.BorderInput"  Color="#FF4A515E" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.BorderInput"  Color="#FF545C6B" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.BorderStrong" Color="#FF5B6371" po:Freeze="True"/>
 
     <!-- Type -->
@@ -42,12 +42,12 @@
     <SolidColorBrush x:Key="Brush.TextHeading"  Color="#FFF0F3F8" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.TextBody"     Color="#FFD8DEE9" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.TextFaint"    Color="#FFB0BAC9" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.TextMuted"    Color="#FF93A0B5" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextMuted"    Color="#FF9DAAC0" po:Freeze="True"/>
 
     <!-- Accent + status -->
-    <SolidColorBrush x:Key="Brush.Accent"       Color="#FF5B9CF8" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.AccentHover"  Color="#FF7CB0FA" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.AccentSoft"   Color="#FF1E3555" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Accent"       Color="#FF6AA6FA" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.AccentHover"  Color="#FF88BAFC" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.AccentSoft"   Color="#FF1C304E" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.OnAccent"     Color="#FF0E1116" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Success"      Color="#FF4ADE80" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Warning"      Color="#FFFBBF24" po:Freeze="True"/>

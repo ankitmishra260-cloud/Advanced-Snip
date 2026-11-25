@@ -411,10 +411,10 @@ namespace AdvancedSnip
                     Width = Math.Max(2, w - 2),
                     Height = height,
                     CornerRadius = new CornerRadius(4),
-                    Background = (Brush)FindResource(isSelected ? "Brush.Accent" : "Brush.BorderStrong"),
                     Opacity = segment.Muted ? 0.55 : 1.0,
                     Tag = i
                 };
+                block.SetResourceReference(Border.BackgroundProperty, isSelected ? "Brush.Accent" : "Brush.BorderStrong");
 
                 // Enough room for a label only when the block is wide enough to hold one;
                 // a two-pixel sliver with text over it is worse than a plain sliver.
@@ -424,16 +424,17 @@ namespace AdvancedSnip
                     if (Math.Abs(segment.Speed - 1) > 0.001) label += $" · {segment.Speed:0.##}x";
                     if (segment.Muted) label += " · muted";
 
-                    block.Child = new TextBlock
+                    var tb = new TextBlock
                     {
                         Text = label,
                         FontSize = 11,
                         Margin = new Thickness(6, 0, 6, 0),
                         VerticalAlignment = VerticalAlignment.Center,
-                        TextTrimming = TextTrimming.CharacterEllipsis,
-                        Foreground = (Brush)FindResource(
-                            isSelected ? "Brush.OnAccent" : "Brush.TextBody")
+                        TextTrimming = TextTrimming.CharacterEllipsis
                     };
+                    tb.SetResourceReference(TextBlock.ForegroundProperty,
+                        isSelected ? "Brush.OnAccent" : "Brush.TextBody");
+                    block.Child = tb;
                 }
 
                 Canvas.SetLeft(block, x);
@@ -502,13 +503,14 @@ namespace AdvancedSnip
             double total = Math.Max(0.001, _project.OutputDuration.TotalSeconds);
             double x = _output.TotalSeconds / total * Timeline.ActualWidth;
 
-            Timeline.Children.Add(new System.Windows.Shapes.Line
+            var playhead = new System.Windows.Shapes.Line
             {
                 X1 = x, Y1 = -3, X2 = x, Y2 = 46,
-                Stroke = (Brush)FindResource("Brush.Danger"),
                 StrokeThickness = 2,
                 IsHitTestVisible = false
-            });
+            };
+            playhead.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "Brush.Danger");
+            Timeline.Children.Add(playhead);
         }
 
         private void Timeline_MouseDown(object sender, MouseButtonEventArgs e)

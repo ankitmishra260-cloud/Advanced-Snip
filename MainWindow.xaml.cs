@@ -212,7 +212,9 @@ namespace AdvancedSnip
             {
                 if (!_populating && ThemeCombo != null)
                 {
-                    SelectComboByTag(ThemeCombo, _app.Settings.Theme);
+                    _populating = true;
+                    try { SelectComboByTag(ThemeCombo, _app.Settings.Theme); }
+                    finally { _populating = false; }
                 }
             }));
 
@@ -1075,10 +1077,10 @@ namespace AdvancedSnip
             if (_populating) return;
             if ((ThemeCombo.SelectedItem as ComboBoxItem)?.Tag is not string tag) return;
 
-            // Applied immediately and persisted so the settings dropdown and app appearance never drift apart
-            ThemeManager.Apply(tag);
+            // Update settings before Apply so ThemeChanged listeners see the new theme immediately
             _working.Theme = tag;
             _app.Settings.Theme = tag;
+            ThemeManager.Apply(tag);
             _app.Settings.Save();
         }
 

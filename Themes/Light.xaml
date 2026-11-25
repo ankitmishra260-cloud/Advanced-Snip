@@ -21,8 +21,8 @@
     <SolidColorBrush x:Key="Brush.Card"         Color="#FFFBFCFE" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Input"        Color="#FFFFFFFF" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Subtle"       Color="#FFEDF1F6" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.Hover"        Color="#16000000" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.NavActive"    Color="#FFE8EEFA" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Hover"        Color="#12000000" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.NavActive"    Color="#FFE8F0FE" po:Freeze="True"/>
 
     <!-- The outer edge of the window itself. WindowChrome runs with
          GlassFrameThickness="0", so Windows draws no frame here and the app
@@ -39,15 +39,15 @@
     <SolidColorBrush x:Key="Brush.TextHeading"  Color="#FF1E293B" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.TextBody"     Color="#FF334155" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.TextFaint"    Color="#FF475569" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.TextMuted"    Color="#FF5A677B" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextMuted"    Color="#FF526074" po:Freeze="True"/>
 
     <!-- Accent + status -->
-    <SolidColorBrush x:Key="Brush.Accent"       Color="#FF3B82F6" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.AccentHover"  Color="#FF2563EB" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.AccentSoft"   Color="#FFBFDBFE" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Accent"       Color="#FF1D4ED8" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.AccentHover"  Color="#FF1E40AF" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.AccentSoft"   Color="#FFE6F0FF" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.OnAccent"     Color="#FFFFFFFF" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.Success"      Color="#FF16A34A" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.Warning"      Color="#FFD97706" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Success"      Color="#FF15803D" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Warning"      Color="#FFB45309" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Danger"       Color="#FFDC2626" po:Freeze="True"/>
 
     <!-- The editor's canvas surround: deliberately mid-grey in both themes so a

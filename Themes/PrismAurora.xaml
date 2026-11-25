@@ -28,12 +28,11 @@
         <GradientStop Offset="1.00" Color="#FF060912"/>
     </RadialGradientBrush>
 
-    <!-- Active Navigation Pill: 5-stop molten celestial cyan-sapphire radiant light beam -->
+    <!-- Active Navigation Pill: deep celestial sapphire-cyan glow keeping cyan accent text readable -->
     <LinearGradientBrush x:Key="Brush.NavActive" StartPoint="0,0" EndPoint="1,0" po:Freeze="True">
-        <GradientStop Offset="0.00" Color="#FF00E5FF"/>
-        <GradientStop Offset="0.18" Color="#FF0091FF"/>
-        <GradientStop Offset="0.52" Color="#FF004CE8"/>
-        <GradientStop Offset="0.85" Color="#FF0E1A36"/>
+        <GradientStop Offset="0.00" Color="#FF073B59"/>
+        <GradientStop Offset="0.35" Color="#FF0A2B54"/>
+        <GradientStop Offset="0.75" Color="#FF0D1D3B"/>
         <GradientStop Offset="1.00" Color="#000E1A36"/>
     </LinearGradientBrush>
 
@@ -53,11 +52,11 @@
 
     <SolidColorBrush x:Key="Brush.Subtle" Color="#FF0A0E18" po:Freeze="True"/>
 
-    <!-- Hover: Radial bioluminescent aura glow expanding from center of hovered element -->
-    <RadialGradientBrush x:Key="Brush.Hover" Center="0.5,0.5" GradientOrigin="0.5,0.5" RadiusX="0.75" RadiusY="0.75" po:Freeze="True">
-        <GradientStop Offset="0.00" Color="#6600E5FF"/>
-        <GradientStop Offset="0.70" Color="#4D0091FF"/>
-        <GradientStop Offset="1.00" Color="#26004CE8"/>
+    <!-- Hover: Radial bioluminescent aura glow calibrated for readable text on hover -->
+    <RadialGradientBrush x:Key="Brush.Hover" Center="0.5,0.5" GradientOrigin="0.5,0.5" RadiusX="0.80" RadiusY="0.80" po:Freeze="True">
+        <GradientStop Offset="0.00" Color="#3300C8E6"/>
+        <GradientStop Offset="0.70" Color="#26007ACC"/>
+        <GradientStop Offset="1.00" Color="#14004CE8"/>
     </RadialGradientBrush>
 
     <!-- Window Edge: Glowing specular titanium-cyan border -->

@@ -1,6 +1,8 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 
@@ -9,30 +11,56 @@ namespace AdvancedSnip
     public partial class SlapExitBadgeWindow : Window
     {
         private readonly PinnedClipWindow _targetWindow;
+        private System.Drawing.Rectangle _targetPhysicalRect;
+        private bool _isPositioning;
 
         public SlapExitBadgeWindow(PinnedClipWindow targetWindow, System.Drawing.Rectangle? initialRect = null)
         {
             _targetWindow = targetWindow ?? throw new ArgumentNullException(nameof(targetWindow));
+            _targetPhysicalRect = initialRect ?? System.Drawing.Rectangle.Empty;
+
             InitializeComponent();
             // Do not set Owner = targetWindow, so WPF does not hide this badge when targetWindow is collapsed
+            WindowStartupLocation = WindowStartupLocation.Manual;
             Topmost = false;
             ShowInTaskbar = false;
-            UpdatePosition(initialRect);
+
+            Loaded += (_, _) => ApplyPhysicalPosition();
+            DpiChanged += (_, _) => ApplyPhysicalPosition();
         }
 
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
-            var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            var handle = new WindowInteropHelper(this).Handle;
             if (handle != IntPtr.Zero)
             {
                 int ex = Services.Win32.GetWindowLong(handle, Services.Win32.GWL_EXSTYLE);
                 ex |= Services.Win32.WS_EX_TOOLWINDOW | Services.Win32.WS_EX_NOACTIVATE;
                 Services.Win32.SetWindowLong(handle, Services.Win32.GWL_EXSTYLE, ex);
 
-                Services.Win32.SetWindowPos(handle, Services.Win32.HWND_BOTTOM, 0, 0, 0, 0,
-                    Services.Win32.SWP_NOMOVE | Services.Win32.SWP_NOSIZE | Services.Win32.SWP_NOACTIVATE);
+                var source = HwndSource.FromHwnd(handle);
+                source?.AddHook(WndProc);
+
+                ApplyPhysicalPosition();
             }
+        }
+
+        private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            // Keep the badge pinned at desktop level (below regular app windows) even after
+            // right-clicking its context menu or interacting with it.
+            if (msg == Services.Win32.WM_WINDOWPOSCHANGING)
+            {
+                try
+                {
+                    var pos = Marshal.PtrToStructure<Services.Win32.WINDOWPOS>(lParam);
+                    pos.hwndInsertAfter = Services.Win32.HWND_BOTTOM;
+                    Marshal.StructureToPtr(pos, lParam, false);
+                }
+                catch { }
+            }
+            return IntPtr.Zero;
         }
 
         protected override void OnClosed(EventArgs e)
@@ -42,22 +70,73 @@ namespace AdvancedSnip
 
         public void UpdatePosition(System.Drawing.Rectangle? physicalRect = null)
         {
-            var rect = physicalRect ?? (_targetWindow != null ? Services.WindowPlacement.GetPhysicalRect(_targetWindow) : System.Drawing.Rectangle.Empty);
-            if (!rect.IsEmpty)
+            if (physicalRect.HasValue && !physicalRect.Value.IsEmpty)
             {
+                _targetPhysicalRect = physicalRect.Value;
+            }
+            else if (_targetWindow != null)
+            {
+                var r = Services.WindowPlacement.GetPhysicalRect(_targetWindow);
+                if (!r.IsEmpty)
+                {
+                    _targetPhysicalRect = r;
+                }
+                else if (_targetWindow.Record != null && _targetWindow.Record.Width > 0 && _targetWindow.Record.Height > 0)
+                {
+                    _targetPhysicalRect = new System.Drawing.Rectangle(
+                        (int)_targetWindow.Record.X,
+                        (int)_targetWindow.Record.Y,
+                        (int)_targetWindow.Record.Width,
+                        (int)_targetWindow.Record.Height);
+                }
+            }
+
+            ApplyPhysicalPosition();
+        }
+
+        private void ApplyPhysicalPosition()
+        {
+            if (_isPositioning || _targetPhysicalRect.IsEmpty) return;
+
+            var handle = new WindowInteropHelper(this).Handle;
+            if (handle == IntPtr.Zero) return;
+
+            _isPositioning = true;
+            try
+            {
+                var rect = _targetPhysicalRect;
+                // Resolve the monitor owning the top-right corner of the slapped image
                 var monitor = Services.DisplayInfo.FromPoint(rect.Right - 1, rect.Top + 1);
                 double scale = monitor.Scale <= 0 ? 1.0 : monitor.Scale;
 
-                // Position badge at top-right inside the slapped image
-                Left = (rect.Right / scale) - Width - 6;
-                Top = (rect.Top / scale) + 6;
-                return;
-            }
+                const double badgeDip = 36.0;
+                const double marginDip = 6.0;
 
-            if (_targetWindow != null && _targetWindow.IsLoaded && _targetWindow.ActualWidth > 0)
+                // Two passes handle crossing a mixed-DPI boundary: pass 1 moves onto the target
+                // monitor (letting Windows apply WM_DPICHANGED), pass 2 locks exact physical pixels.
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    int badgePx = Math.Max(24, (int)Math.Round(badgeDip * scale));
+                    int marginPx = Math.Max(2, (int)Math.Round(marginDip * scale));
+
+                    int x = rect.Right - badgePx - marginPx;
+                    int y = rect.Top + marginPx;
+
+                    // Keep the exit badge reachable inside the monitor bounds even if the image
+                    // was dragged partially past a screen edge.
+                    int maxX = Math.Max(monitor.Bounds.Left, monitor.Bounds.Right - badgePx);
+                    int maxY = Math.Max(monitor.Bounds.Top, monitor.Bounds.Bottom - badgePx);
+                    x = Math.Clamp(x, monitor.Bounds.Left, maxX);
+                    y = Math.Clamp(y, monitor.Bounds.Top, maxY);
+
+                    Services.Win32.SetWindowPos(handle, Services.Win32.HWND_BOTTOM,
+                        x, y, badgePx, badgePx,
+                        Services.Win32.SWP_NOACTIVATE);
+                }
+            }
+            finally
             {
-                Left = _targetWindow.Left + _targetWindow.ActualWidth - Width - 6;
-                Top = _targetWindow.Top + 6;
+                _isPositioning = false;
             }
         }
 
@@ -103,7 +182,6 @@ namespace AdvancedSnip
             _targetWindow.CopyImageToClipboard();
             ToastWindow.Show("Image Copied", "Pinned screenshot copied to clipboard.");
         }
-
 
         private void Opacity100_Click(object sender, RoutedEventArgs e) => _targetWindow.SetImageOpacity(1.0);
         private void Opacity75_Click(object sender, RoutedEventArgs e)  => _targetWindow.SetImageOpacity(0.75);

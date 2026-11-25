@@ -314,8 +314,8 @@ namespace AdvancedSnip
             if (btn == null) return;
             if (active)
             {
-                btn.Background = (Brush)FindResource("Brush.AccentSoft");
-                btn.BorderBrush = (Brush)FindResource("Brush.Accent");
+                btn.SetResourceReference(Button.BackgroundProperty, "Brush.AccentSoft");
+                btn.SetResourceReference(Button.BorderBrushProperty, "Brush.Accent");
             }
             else
             {

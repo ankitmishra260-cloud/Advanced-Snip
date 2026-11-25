@@ -23,38 +23,38 @@
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="Brush.NavActive" StartPoint="0,0" EndPoint="1,0" po:Freeze="True">
-        <GradientStop Offset="0"    Color="#FFBAE6FD"/>
-        <GradientStop Offset="0.5"  Color="#FFD8EFFE"/>
+        <GradientStop Offset="0"    Color="#FFD9F0FE"/>
+        <GradientStop Offset="0.5"  Color="#FFE6F5FE"/>
         <GradientStop Offset="1"    Color="#FFF5FAFE"/>
     </LinearGradientBrush>
 
     <SolidColorBrush x:Key="Brush.Card"         Color="#FFFFFFFF" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Input"        Color="#FFF7FBFE" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Subtle"       Color="#FFEDF5FC" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.Hover"        Color="#2000A3FF" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Hover"        Color="#1800A3FF" po:Freeze="True"/>
 
     <!-- Window edge: glowing electric neon blue border -->
     <SolidColorBrush x:Key="Brush.WindowEdge"   Color="#FF00A3FF" po:Freeze="True"/>
 
     <!-- Lines & structural borders -->
     <SolidColorBrush x:Key="Brush.Border"       Color="#FFD3E3F5" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.BorderInput"  Color="#FFBFD7F0" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.BorderInput"  Color="#FFA8C8E8" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.BorderStrong" Color="#FF93C5FD" po:Freeze="True"/>
 
     <!-- Typography: deep navy & ocean slate for maximum AAA contrast on light cards -->
     <SolidColorBrush x:Key="Brush.Text"         Color="#FF0C2340" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.TextHeading"  Color="#FF0A3059" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.TextBody"     Color="#FF1E3A5F" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.TextFaint"    Color="#FF476788" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.TextMuted"    Color="#FF507299" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextFaint"    Color="#FF436282" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextMuted"    Color="#FF486A90" po:Freeze="True"/>
 
     <!-- Accent + status: electric neon azure, sky cyan, and emerald -->
-    <SolidColorBrush x:Key="Brush.Accent"       Color="#FF0284C7" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.AccentHover"  Color="#FF0369A1" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.AccentSoft"   Color="#FFBAE6FD" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Accent"       Color="#FF0369A1" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.AccentHover"  Color="#FF075985" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.AccentSoft"   Color="#FFDFF2FE" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.OnAccent"     Color="#FFFFFFFF" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.Success"      Color="#FF059669" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.Warning"      Color="#FFD97706" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Success"      Color="#FF047857" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Warning"      Color="#FFB45309" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Danger"       Color="#FFE11D48" po:Freeze="True"/>
 
     <!-- Editor canvas backdrop -->

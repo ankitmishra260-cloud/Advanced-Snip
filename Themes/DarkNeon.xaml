@@ -23,14 +23,14 @@
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="Brush.NavActive" StartPoint="0,0" EndPoint="1,0" po:Freeze="True">
-        <GradientStop Offset="0"    Color="#FF381859"/>
-        <GradientStop Offset="1"    Color="#FF1C1A4A"/>
+        <GradientStop Offset="0"    Color="#FF2D134A"/>
+        <GradientStop Offset="1"    Color="#FF17163E"/>
     </LinearGradientBrush>
 
     <SolidColorBrush x:Key="Brush.Card"         Color="#FF171B2B" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Input"        Color="#FF1E2338" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Subtle"       Color="#FF131724" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.Hover"        Color="#FF342252" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Hover"        Color="#FF2A1C45" po:Freeze="True"/>
 
     <!-- Window edge: glowing electric neon violet border -->
     <SolidColorBrush x:Key="Brush.WindowEdge"   Color="#FFA855F7" po:Freeze="True"/>
@@ -48,10 +48,10 @@
     <SolidColorBrush x:Key="Brush.TextMuted"    Color="#FF94A3B8" po:Freeze="True"/>
 
     <!-- Accent + status: electric neon violet, neon magenta, glowing neon cyan, vibrant emerald -->
-    <SolidColorBrush x:Key="Brush.Accent"       Color="#FFB855FF" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.AccentHover"  Color="#FFC875FF" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.AccentSoft"   Color="#FF38125E" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.OnAccent"     Color="#FFFFFFFF" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Accent"       Color="#FFC473FF" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.AccentHover"  Color="#FFD699FF" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.AccentSoft"   Color="#FF2B104A" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.OnAccent"     Color="#FF11041F" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Success"      Color="#FF00F59B" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Warning"      Color="#FFFBBF24" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Danger"       Color="#FFF43F5E" po:Freeze="True"/>

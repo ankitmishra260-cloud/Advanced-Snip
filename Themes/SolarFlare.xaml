@@ -22,35 +22,34 @@
         <GradientStop Offset="1.00" Color="#FF0C0603"/>
     </RadialGradientBrush>
 
-    <!-- Active Navigation Pill: 5-stop radiant molten solar gold & amber beam -->
+    <!-- Active Navigation Pill: deep molten ember glow so bright solar gold text reads clearly -->
     <LinearGradientBrush x:Key="Brush.NavActive" StartPoint="0,0" EndPoint="1,0" po:Freeze="True">
-        <GradientStop Offset="0.00" Color="#FFFFB800"/>
-        <GradientStop Offset="0.22" Color="#FFF59E0B"/>
-        <GradientStop Offset="0.55" Color="#FFDC2626"/>
-        <GradientStop Offset="0.85" Color="#FF280F05"/>
-        <GradientStop Offset="1.00" Color="#00280F05"/>
+        <GradientStop Offset="0.00" Color="#FF4D2306"/>
+        <GradientStop Offset="0.35" Color="#FF3C1408"/>
+        <GradientStop Offset="0.75" Color="#FF260D06"/>
+        <GradientStop Offset="1.00" Color="#00180904"/>
     </LinearGradientBrush>
 
     <!-- Cards: Specular top-lit obsidian magma tiles -->
     <LinearGradientBrush x:Key="Brush.Card" StartPoint="0,0" EndPoint="0,1" po:Freeze="True">
-        <GradientStop Offset="0.00" Color="#FF221309"/>
-        <GradientStop Offset="0.08" Color="#FF1A0E06"/>
-        <GradientStop Offset="0.90" Color="#FF120904"/>
-        <GradientStop Offset="1.00" Color="#FF0B0502"/>
+        <GradientStop Offset="0.00" Color="#FF24140A"/>
+        <GradientStop Offset="0.08" Color="#FF1B0F07"/>
+        <GradientStop Offset="0.90" Color="#FF130A04"/>
+        <GradientStop Offset="1.00" Color="#FF0C0602"/>
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="Brush.Input" StartPoint="0,0" EndPoint="0,1" po:Freeze="True">
-        <GradientStop Offset="0.0" Color="#FF26160C"/>
-        <GradientStop Offset="1.0" Color="#FF150C06"/>
+        <GradientStop Offset="0.0" Color="#FF28170C"/>
+        <GradientStop Offset="1.0" Color="#FF170D06"/>
     </LinearGradientBrush>
 
     <SolidColorBrush x:Key="Brush.Subtle" Color="#FF0E0703" po:Freeze="True"/>
 
-    <!-- Hover: Radial bioluminescent solar gold aura glow -->
-    <RadialGradientBrush x:Key="Brush.Hover" Center="0.5,0.5" GradientOrigin="0.5,0.5" RadiusX="0.75" RadiusY="0.75" po:Freeze="True">
-        <GradientStop Offset="0.00" Color="#66FFB800"/>
-        <GradientStop Offset="0.70" Color="#4DF59E0B"/>
-        <GradientStop Offset="1.00" Color="#26DC2626"/>
+    <!-- Hover: controlled ember glow preserving legible text and accent contrast -->
+    <RadialGradientBrush x:Key="Brush.Hover" Center="0.5,0.5" GradientOrigin="0.5,0.5" RadiusX="0.80" RadiusY="0.80" po:Freeze="True">
+        <GradientStop Offset="0.00" Color="#38F59E0B"/>
+        <GradientStop Offset="0.70" Color="#28DC2626"/>
+        <GradientStop Offset="1.00" Color="#147C2D12"/>
     </RadialGradientBrush>
 
     <!-- Window Edge: Glowing solar gold to crimson gradient border -->
@@ -61,30 +60,30 @@
     </LinearGradientBrush>
 
     <!-- Lines & structural borders -->
-    <SolidColorBrush x:Key="Brush.Border"       Color="#FF381D0D" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.BorderInput"  Color="#FF4D2913" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Border"       Color="#FF4F2B14" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.BorderInput"  Color="#FF6B3B1C" po:Freeze="True"/>
 
     <LinearGradientBrush x:Key="Brush.BorderStrong" StartPoint="0,0" EndPoint="1,0.8" po:Freeze="True">
-        <GradientStop Offset="0.00" Color="#FFFFB800"/>
-        <GradientStop Offset="0.50" Color="#FFF59E0B"/>
-        <GradientStop Offset="1.00" Color="#FFDC2626"/>
+        <GradientStop Offset="0.00" Color="#FFD99100"/>
+        <GradientStop Offset="0.50" Color="#FFC86D0B"/>
+        <GradientStop Offset="1.00" Color="#FFA8241C"/>
     </LinearGradientBrush>
 
     <!-- Typography: pure diamond white & radiant warm solar ivory -->
     <SolidColorBrush x:Key="Brush.Text"         Color="#FFFFFFFF" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.TextHeading"  Color="#FFFFF7ED" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.TextBody"     Color="#FFF5E8DB" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.TextFaint"    Color="#FFD4BEAA" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.TextMuted"    Color="#FFB39780" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextFaint"    Color="#FFD9C4B0" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.TextMuted"    Color="#FFC4A992" po:Freeze="True"/>
 
     <!-- Accent + status: molten solar gold, sunlit amber, radiant crimson -->
-    <SolidColorBrush x:Key="Brush.Accent"       Color="#FFFFB800" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.AccentHover"  Color="#FFFCD34D" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.AccentSoft"   Color="#FF3E1B05" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Accent"       Color="#FFFFC125" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.AccentHover"  Color="#FFFDE047" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.AccentSoft"   Color="#FF3D1B06" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.OnAccent"     Color="#FF180900" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.Success"      Color="#FF10B981" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Success"      Color="#FF34D399" po:Freeze="True"/>
     <SolidColorBrush x:Key="Brush.Warning"      Color="#FFFFB800" po:Freeze="True"/>
-    <SolidColorBrush x:Key="Brush.Danger"       Color="#FFEF4444" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush.Danger"       Color="#FFF87171" po:Freeze="True"/>
 
     <!-- Editor canvas backdrop -->
     <SolidColorBrush x:Key="Brush.CanvasBack"   Color="#FF0C0603" po:Freeze="True"/>
